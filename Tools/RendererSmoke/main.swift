@@ -80,11 +80,13 @@ guard html.contains("data-math="),
       html.contains("*literal emphasis markers*"),
       html.contains("<code>code with a ` backtick</code>"),
       html.contains("href=\"https://example.com/formatted\"><strong>formatted</strong> link</a>"),
-      html.contains("<ol start=\"3\">"),
+      html.contains("<ol start=\"3\" data-source-line="),
       html.contains("href=\"docs/My File.md\""),
       html.contains("alt=\"Remote image\" title=\"Example\""),
       html.contains("href=\"docs/Guide File.md\" title=\"Guide title\">Reference <strong>link</strong></a>"),
       html.contains("src=\"https://example.com/reference.png\" alt=\"Reference image\""),
+      html.contains("window.__moriSourceAnchors"),
+      html.contains("article > [data-source-line]"),
       !html.contains("[guide]:"),
       !html.contains("href=\"javascript:"),
       !html.contains("url(fonts/") else {
@@ -154,6 +156,9 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
           referenceImages: document.querySelectorAll('img[src="https://example.com/reference.png"]').length,
           codeWithBacktick: [...document.querySelectorAll('code')].filter(node => node.textContent.includes('`')).length,
           formattedDirectLinks: document.querySelectorAll('a[href="https://example.com/formatted"] strong').length,
+          sourceAnchors: window.moriSourceAnchors().length,
+          allSourceNodes: document.querySelectorAll('[data-source-line]').length,
+          indexedTopLevelLists: document.querySelectorAll('article > ul[data-source-line],article > ol[data-source-line]').length,
           errors: document.querySelectorAll('.math-error,.mermaid-error').length
         })
         """
@@ -181,6 +186,9 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
                   (result["referenceImages"] as? Int ?? 0) == 1,
                   (result["codeWithBacktick"] as? Int ?? 0) == 1,
                   (result["formattedDirectLinks"] as? Int ?? 0) == 1,
+                  (result["sourceAnchors"] as? Int ?? 0) > 0,
+                  (result["sourceAnchors"] as? Int ?? 0) < (result["allSourceNodes"] as? Int ?? 0),
+                  (result["indexedTopLevelLists"] as? Int ?? 0) >= 3,
                   (result["errors"] as? Int ?? 1) == 0 else {
                 self.fail("Unexpected rendered DOM: \(String(describing: value))")
                 return

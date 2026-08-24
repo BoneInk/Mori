@@ -23,9 +23,10 @@ struct MarkdownPreview: NSViewRepresentable {
         view.navigationDelegate = context.coordinator
         context.coordinator.parent = self
         context.coordinator.signature = signature
+        context.coordinator.documentLength = (markdown as NSString).length
         context.coordinator.webView = view
         view.onUserScroll = { [weak coordinator = context.coordinator] in
-            coordinator?.requestScrollUpdate()
+            coordinator?.requestScrollUpdate(userInitiated: true)
         }
         context.coordinator.startObservingScroll()
         context.coordinator.scheduleLoad(markdown: markdown,
@@ -44,6 +45,7 @@ struct MarkdownPreview: NSViewRepresentable {
         context.coordinator.parent = self
         if signature != context.coordinator.signature {
             context.coordinator.signature = signature
+            context.coordinator.documentLength = (markdown as NSString).length
             context.coordinator.pendingPosition = scrollPosition
             context.coordinator.scheduleLoad(markdown: markdown,
                                              title: title,
@@ -81,6 +83,9 @@ struct MarkdownPreview: NSViewRepresentable {
         private var scrollObserver: NSObjectProtocol?
         private var lastScrollPublish = 0.0
         private var pendingScrollUpdate: DispatchWorkItem?
+        private var scrollRequestGeneration = 0
+        private var suppressScrollEventsUntil = 0.0
+        fileprivate var documentLength = 0
         private var renderTask: Task<Void, Never>?
 
         deinit {
@@ -133,42 +138,58 @@ struct MarkdownPreview: NSViewRepresentable {
                 object: scrollView,
                 queue: .main
             ) { [weak self] _ in
-                Task { @MainActor in self?.requestScrollUpdate() }
+                Task { @MainActor in self?.requestScrollUpdate(userInitiated: false) }
             }
         }
 
-        func requestScrollUpdate() {
-            let interval = 1.0 / 30.0
+        func requestScrollUpdate(userInitiated: Bool) {
+            let interval = documentLength > 750_000 ? 1.0 / 10.0 : (documentLength > 150_000 ? 1.0 / 15.0 : 1.0 / 30.0)
             let now = ProcessInfo.processInfo.systemUptime
+            if userInitiated {
+                suppressScrollEventsUntil = 0
+            } else if now < suppressScrollEventsUntil {
+                return
+            }
+            if parent?.scrollSource != .preview { parent?.scrollSource = .preview }
+            scrollRequestGeneration &+= 1
+            let generation = scrollRequestGeneration
             let elapsed = now - lastScrollPublish
             if elapsed >= interval {
                 pendingScrollUpdate?.cancel()
                 pendingScrollUpdate = nil
                 lastScrollPublish = now
-                previewDidScroll()
-            } else if pendingScrollUpdate == nil {
+                previewDidScroll(generation: generation)
+            } else {
+                pendingScrollUpdate?.cancel()
                 let work = DispatchWorkItem { [weak self] in
                     guard let self else { return }
                     self.pendingScrollUpdate = nil
                     self.lastScrollPublish = ProcessInfo.processInfo.systemUptime
-                    self.previewDidScroll()
+                    self.previewDidScroll(generation: generation)
                 }
                 pendingScrollUpdate = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + interval - elapsed, execute: work)
             }
         }
 
-        private func previewDidScroll() {
-            guard let parent, let webView else { return }
+        private func previewDidScroll(generation: Int) {
+            guard generation == scrollRequestGeneration,
+                  let parent,
+                  parent.scrollSource == .preview,
+                  ProcessInfo.processInfo.systemUptime >= suppressScrollEventsUntil,
+                  let webView else { return }
             webView.evaluateJavaScript("window.moriCurrentPosition && window.moriCurrentPosition()") { [weak self] value, _ in
                 guard let self,
+                      generation == self.scrollRequestGeneration,
+                      let parent = self.parent,
+                      parent.scrollSource == .preview,
+                      ProcessInfo.processInfo.systemUptime >= self.suppressScrollEventsUntil,
                       let result = value as? [String: Any],
                       let line = result["line"] as? Int,
                       let fraction = result["fraction"] as? Double else { return }
                 let position = ScrollPosition(line: line, fraction: min(1, max(0, fraction)))
                 guard position != parent.scrollPosition || parent.scrollSource != .preview else { return }
-                self.parent?.scrollSource = .preview
-                self.parent?.scrollPosition = position
+                parent.scrollPosition = position
             }
         }
 
@@ -202,6 +223,10 @@ struct MarkdownPreview: NSViewRepresentable {
         func scroll(_ webView: WKWebView, to position: ScrollPosition, force: Bool = false) {
             guard force || position != lastAppliedPosition else { return }
             lastAppliedPosition = position
+            pendingScrollUpdate?.cancel()
+            pendingScrollUpdate = nil
+            scrollRequestGeneration &+= 1
+            suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.12
             webView.evaluateJavaScript("window.moriScrollToLine && window.moriScrollToLine(\(position.line), \(min(1, max(0, position.fraction))))")
         }
 

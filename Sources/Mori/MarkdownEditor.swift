@@ -53,7 +53,7 @@ struct MarkdownEditor: NSViewRepresentable {
         context.coordinator.scrollView = scrollView
         context.coordinator.lineNumberRuler = lineNumberRuler
         scrollView.onUserScroll = { [weak coordinator = context.coordinator] in
-            coordinator?.requestScrollUpdate()
+            coordinator?.requestScrollUpdate(userInitiated: true)
         }
         context.coordinator.startObservingScroll()
         applyTheme(textView)
@@ -64,30 +64,32 @@ struct MarkdownEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
         context.coordinator.parent = self
-        textView.setAccessibilityLabel(isMarkdown ? "Markdown source editor" : "Text editor")
         if let textView = textView as? MoriTextView {
             textView.onInsertImages = onInsertImages
             textView.onPasteImage = onPasteImage
         }
-        textView.isContinuousSpellCheckingEnabled = settings.checkSpelling && isMarkdown
-        configureWrapping(textView)
-        scrollView.rulersVisible = settings.showLineNumbers
-        if textView.string != text {
-            textView.string = text
-            context.coordinator.lineNumberRuler?.invalidateLineNumbers()
-            context.coordinator.highlight()
-        }
-        applyTheme(textView)
-        if context.coordinator.lastTheme != theme ||
+        let configurationChanged = context.coordinator.lastTheme != theme ||
             context.coordinator.lastTypography != typography ||
             context.coordinator.lastSettings != settings ||
             context.coordinator.lastIsMarkdown != isMarkdown ||
-            context.coordinator.lastLanguage != language {
+            context.coordinator.lastLanguage != language
+        if context.coordinator.lastBoundText != text {
+            textView.string = text
+            context.coordinator.lastBoundText = text
+            context.coordinator.lineNumberRuler?.invalidateLineNumbers()
+            context.coordinator.highlight()
+        }
+        if configurationChanged {
             context.coordinator.lastTheme = theme
             context.coordinator.lastTypography = typography
             context.coordinator.lastSettings = settings
             context.coordinator.lastIsMarkdown = isMarkdown
             context.coordinator.lastLanguage = language
+            textView.setAccessibilityLabel(isMarkdown ? "Markdown source editor" : "Text editor")
+            textView.isContinuousSpellCheckingEnabled = settings.checkSpelling && isMarkdown
+            configureWrapping(textView)
+            scrollView.rulersVisible = settings.showLineNumbers
+            applyTheme(textView)
             context.coordinator.highlight()
         }
         if scrollSource == .preview || scrollSource == .outline {
@@ -149,11 +151,17 @@ struct MarkdownEditor: NSViewRepresentable {
         private var lineOffsetsTextLength = -1
         private var lastScrollPublish = 0.0
         private var pendingScrollUpdate: DispatchWorkItem?
+        private var scrollRequestGeneration = 0
+        private var suppressScrollEventsUntil = 0.0
         private var pendingHighlight: DispatchWorkItem?
         private var currentLineHighlightRange: NSRange?
         private var isApplyingAutomaticPair = false
+        fileprivate var lastBoundText: String
 
-        init(_ parent: MarkdownEditor) { self.parent = parent }
+        init(_ parent: MarkdownEditor) {
+            self.parent = parent
+            lastBoundText = parent.text
+        }
 
         deinit {
             pendingHighlight?.cancel()
@@ -167,48 +175,62 @@ struct MarkdownEditor: NSViewRepresentable {
                 object: scrollView,
                 queue: .main
             ) { [weak self] _ in
-                self?.requestScrollUpdate()
+                self?.requestScrollUpdate(userInitiated: false)
             }
         }
 
-        func requestScrollUpdate() {
-            let interval = 1.0 / 30.0
+        func requestScrollUpdate(userInitiated: Bool) {
+            let textLength = textView?.textStorage?.length ?? 0
+            let interval = textLength > 750_000 ? 1.0 / 12.0 : (textLength > 150_000 ? 1.0 / 20.0 : 1.0 / 30.0)
             let now = ProcessInfo.processInfo.systemUptime
+            if userInitiated {
+                suppressScrollEventsUntil = 0
+            } else if now < suppressScrollEventsUntil {
+                return
+            }
+            if parent.scrollSource != .editor { parent.scrollSource = .editor }
+            scrollRequestGeneration &+= 1
+            let generation = scrollRequestGeneration
             let elapsed = now - lastScrollPublish
             if elapsed >= interval {
                 pendingScrollUpdate?.cancel()
                 pendingScrollUpdate = nil
                 lastScrollPublish = now
-                editorDidScroll()
-            } else if pendingScrollUpdate == nil {
+                editorDidScroll(generation: generation)
+            } else {
+                pendingScrollUpdate?.cancel()
                 let work = DispatchWorkItem { [weak self] in
                     guard let self else { return }
                     self.pendingScrollUpdate = nil
                     self.lastScrollPublish = ProcessInfo.processInfo.systemUptime
-                    self.editorDidScroll()
+                    self.editorDidScroll(generation: generation)
                 }
                 pendingScrollUpdate = work
                 DispatchQueue.main.asyncAfter(deadline: .now() + interval - elapsed, execute: work)
             }
         }
 
-        private func editorDidScroll() {
+        private func editorDidScroll(generation: Int) {
+            guard generation == scrollRequestGeneration,
+                  parent.scrollSource == .editor,
+                  ProcessInfo.processInfo.systemUptime >= suppressScrollEventsUntil else { return }
             guard let scrollView,
                   let textView,
                   let layoutManager = textView.layoutManager,
                   let textContainer = textView.textContainer else { return }
             lineNumberRuler?.needsDisplay = true
-            if textView.string.utf16.count > 750_000 { scheduleHighlight() }
+            let textLength = textView.textStorage?.length ?? 0
+            if textLength > 750_000 { scheduleHighlight() }
             rebuildLineOffsetsIfNeeded()
             let containerY = max(0, scrollView.contentView.bounds.minY - textView.textContainerOrigin.y)
             var glyphFraction: CGFloat = 0
             let glyph = layoutManager.glyphIndex(for: NSPoint(x: 1, y: containerY),
                                                  in: textContainer,
                                                  fractionOfDistanceThroughGlyph: &glyphFraction)
-            let character = min(layoutManager.characterIndexForGlyph(at: glyph), max(0, (textView.string as NSString).length - 1))
+            let character = min(layoutManager.characterIndexForGlyph(at: glyph), max(0, textLength - 1))
             let line = lineNumber(for: character)
             let start = lineOffsets[min(line, lineOffsets.count - 1)]
-            let end = line + 1 < lineOffsets.count ? lineOffsets[line + 1] : (textView.string as NSString).length
+            let end = line + 1 < lineOffsets.count ? lineOffsets[line + 1] : textLength
             let glyphRange = layoutManager.glyphRange(forCharacterRange: NSRange(location: start, length: max(1, end - start)), actualCharacterRange: nil)
             let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
             let fraction = rect.height > 1 ? Double((containerY - rect.minY) / rect.height) : 0
@@ -226,13 +248,17 @@ struct MarkdownEditor: NSViewRepresentable {
             rebuildLineOffsetsIfNeeded()
             let line = min(max(0, position.line), lineOffsets.count - 1)
             let start = lineOffsets[line]
-            let end = line + 1 < lineOffsets.count ? lineOffsets[line + 1] : (textView.string as NSString).length
+            let end = line + 1 < lineOffsets.count ? lineOffsets[line + 1] : (textView.textStorage?.length ?? 0)
             let glyphRange = layoutManager.glyphRange(forCharacterRange: NSRange(location: start, length: max(1, end - start)), actualCharacterRange: nil)
             let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
             let requested = textView.textContainerOrigin.y + rect.minY + CGFloat(min(1, max(0, position.fraction))) * rect.height
             let maximum = max(0, textView.bounds.height - scrollView.contentView.bounds.height)
             let target = min(maximum, max(0, requested))
             guard abs(scrollView.contentView.bounds.minY - target) > 1 else { return }
+            pendingScrollUpdate?.cancel()
+            pendingScrollUpdate = nil
+            scrollRequestGeneration &+= 1
+            suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.12
             scrollView.contentView.scroll(to: NSPoint(x: 0, y: target))
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
@@ -262,9 +288,11 @@ struct MarkdownEditor: NSViewRepresentable {
             guard !isHighlighting, let textView else { return }
             lineNumberRuler?.invalidateLineNumbers()
             lineOffsetsTextLength = -1
-            if parent.text != textView.string {
-                parent.text = textView.string
-                if textView.string.utf16.count < 40_000 {
+            let updatedText = textView.string
+            if parent.text != updatedText {
+                lastBoundText = updatedText
+                parent.text = updatedText
+                if (updatedText as NSString).length < 40_000 {
                     highlight()
                 } else {
                     scheduleHighlight()
@@ -473,7 +501,9 @@ struct MarkdownEditor: NSViewRepresentable {
                 textView.performTextFinderAction(item)
             }
             if parent.text != textView.string {
-                parent.text = textView.string
+                let updatedText = textView.string
+                lastBoundText = updatedText
+                parent.text = updatedText
                 highlight()
             }
         }

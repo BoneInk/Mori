@@ -10,16 +10,14 @@ struct ContentView: View {
         ZStack {
             document.theme.background.ignoresSafeArea()
 
-            HStack(spacing: 0) {
+            HSplitView {
                 if document.showSidebar && document.showFileLibrary && !document.focusMode {
                     SidebarView()
-                        .frame(width: 215)
-                    Divider().opacity(0.5)
+                        .frame(minWidth: 180, idealWidth: 235, maxWidth: 460)
                 }
                 if document.showSidebar && document.showOutline && document.previewFileURL == nil && document.isMarkdownDocument && !document.focusMode {
                     OutlinePane(scrollSync: scrollSync)
-                        .frame(width: 235)
-                    Divider().opacity(0.5)
+                        .frame(minWidth: 190, idealWidth: 260, maxWidth: 520)
                 }
 
                 VStack(spacing: 0) {
@@ -40,6 +38,8 @@ struct ContentView: View {
 
                     StatusBar()
                 }
+                .frame(minWidth: 560)
+                .layoutPriority(1)
             }
 
             if isDropTarget {
