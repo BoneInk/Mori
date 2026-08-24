@@ -11,10 +11,38 @@
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>NSHighResolutionCapable</key><true/>
   <key>CFBundleIconFile</key><string>AppIcon</string>
-  <key>CFBundleDocumentTypes</key><array><dict>
-    <key>CFBundleTypeName</key><string>Markdown Document</string>
-    <key>CFBundleTypeRole</key><string>Editor</string>
-    <key>LSHandlerRank</key><string>Alternate</string>
-    <key>CFBundleTypeExtensions</key><array><string>md</string><string>markdown</string><string>txt</string></array>
-  </dict></array>
+  <key>CFBundleDocumentTypes</key><array>
+    <dict>
+      <key>CFBundleTypeName</key><string>Markdown Document</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>CFBundleTypeExtensions</key><array><string>md</string><string>markdown</string></array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Text and Source Document</string>
+      <key>CFBundleTypeRole</key><string>Editor</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array>
+        <string>public.text</string>
+        <string>public.source-code</string>
+        <string>public.script</string>
+      </array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>Image Document</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array>
+        <string>public.image</string>
+      </array>
+    </dict>
+    <dict>
+      <key>CFBundleTypeName</key><string>PDF Document</string>
+      <key>CFBundleTypeRole</key><string>Viewer</string>
+      <key>LSHandlerRank</key><string>Alternate</string>
+      <key>LSItemContentTypes</key><array>
+        <string>com.adobe.pdf</string>
+      </array>
+    </dict>
+  </array>
 </dict></plist>

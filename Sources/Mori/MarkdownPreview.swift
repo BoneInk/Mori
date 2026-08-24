@@ -6,7 +6,9 @@ struct MarkdownPreview: NSViewRepresentable {
     let revision: Int
     let title: String
     let theme: EditorTheme
+    let typography: TypographySettings
     let baseURL: URL?
+    let onOpenLocalFile: (URL) -> Void
     @Binding var scrollPosition: ScrollPosition
     @Binding var scrollSource: ScrollSource
 
@@ -16,6 +18,7 @@ struct MarkdownPreview: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         let view = UserTrackingWebView(frame: .zero, configuration: config)
+        view.setAccessibilityLabel("Rendered Markdown preview")
         view.setValue(false, forKey: "drawsBackground")
         view.navigationDelegate = context.coordinator
         context.coordinator.parent = self
@@ -25,7 +28,15 @@ struct MarkdownPreview: NSViewRepresentable {
             coordinator?.requestScrollUpdate()
         }
         context.coordinator.startObservingScroll()
-        load(view)
+        context.coordinator.scheduleLoad(markdown: markdown,
+                                         title: title,
+                                         theme: theme,
+                                         typography: typography,
+                                         baseURL: baseURL,
+                                         containsMermaid: containsMermaidDiagram,
+                                         containsMath: containsMathExpression,
+                                         expectedSignature: signature,
+                                         debounce: false)
         return view
     }
 
@@ -34,18 +45,32 @@ struct MarkdownPreview: NSViewRepresentable {
         if signature != context.coordinator.signature {
             context.coordinator.signature = signature
             context.coordinator.pendingPosition = scrollPosition
-            load(view)
+            context.coordinator.scheduleLoad(markdown: markdown,
+                                             title: title,
+                                             theme: theme,
+                                             typography: typography,
+                                             baseURL: baseURL,
+                                             containsMermaid: containsMermaidDiagram,
+                                             containsMath: containsMathExpression,
+                                             expectedSignature: signature,
+                                             debounce: true)
         } else if scrollSource == .editor || scrollSource == .outline {
             context.coordinator.scroll(view, to: scrollPosition)
         }
     }
 
-    private var signature: String { "\(theme.rawValue):\(revision):\(baseURL?.path ?? "")" }
+    private var signature: String { "\(theme.hashValue):\(typography.hashValue):\(revision):\(baseURL?.path ?? "")" }
 
-    private func load(_ view: WKWebView) {
-        view.loadHTMLString(MarkdownRenderer.document(markdown: markdown, title: title, theme: theme), baseURL: baseURL)
+    private var containsMermaidDiagram: Bool {
+        markdown.range(of: #"(?m)^\s*(?:```|~~~)(?:mermaid|mmd)(?:\s.*)?$"#, options: .regularExpression) != nil
     }
 
+    private var containsMathExpression: Bool {
+        markdown.range(of: #"(?m)^\s*(?:\$\$|\\\[)\s*$|(?<!\\)\$(?!\s)[^$\n]+?(?<!\s|\\)\$"#,
+                       options: .regularExpression) != nil
+    }
+
+    @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
         var signature = ""
         var pendingPosition: ScrollPosition?
@@ -56,9 +81,47 @@ struct MarkdownPreview: NSViewRepresentable {
         private var scrollObserver: NSObjectProtocol?
         private var lastScrollPublish = 0.0
         private var pendingScrollUpdate: DispatchWorkItem?
+        private var renderTask: Task<Void, Never>?
 
         deinit {
+            renderTask?.cancel()
             if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
+        }
+
+        func scheduleLoad(markdown: String,
+                          title: String,
+                          theme: EditorTheme,
+                          typography: TypographySettings,
+                          baseURL: URL?,
+                          containsMermaid: Bool,
+                          containsMath: Bool,
+                          expectedSignature: String,
+                          debounce: Bool) {
+            renderTask?.cancel()
+            renderTask = Task { [weak self, weak webView] in
+                if debounce { try? await Task.sleep(for: .milliseconds(85)) }
+                guard !Task.isCancelled else { return }
+                let html = await Task.detached(priority: .userInitiated) {
+                    MarkdownRenderer.document(markdown: markdown, title: title, theme: theme, typography: typography)
+                }.value
+                guard !Task.isCancelled,
+                      let self,
+                      self.signature == expectedSignature,
+                      let webView else { return }
+                let controller = webView.configuration.userContentController
+                controller.removeAllUserScripts()
+                if containsMermaid, let script = MermaidRuntime.script {
+                    controller.addUserScript(
+                        WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+                    )
+                }
+                if containsMath, let script = MathRuntime.script {
+                    controller.addUserScript(
+                        WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+                    )
+                }
+                webView.loadHTMLString(html, baseURL: baseURL)
+            }
         }
 
         func startObservingScroll() {
@@ -70,7 +133,7 @@ struct MarkdownPreview: NSViewRepresentable {
                 object: scrollView,
                 queue: .main
             ) { [weak self] _ in
-                self?.requestScrollUpdate()
+                Task { @MainActor in self?.requestScrollUpdate() }
             }
         }
 
@@ -113,9 +176,26 @@ struct MarkdownPreview: NSViewRepresentable {
             if scrollObserver == nil { startObservingScroll() }
             let position = pendingPosition ?? parent?.scrollPosition ?? ScrollPosition()
             pendingPosition = nil
-            DispatchQueue.main.async { [weak self, weak webView] in
+            webView.evaluateJavaScript("if(window.moriRenderAll){window.moriRenderAll()} true") { [weak self, weak webView] _, _ in
                 guard let self, let webView else { return }
-                self.scroll(webView, to: position, force: true)
+                self.waitForEnhancements(in: webView, position: position, remainingAttempts: 80)
+            }
+        }
+
+        private func waitForEnhancements(in webView: WKWebView, position: ScrollPosition, remainingAttempts: Int) {
+            webView.evaluateJavaScript("window.moriMermaidDone !== false && window.moriMathDone !== false") { [weak self, weak webView] value, _ in
+                guard let self, let webView else { return }
+                if value as? Bool == true || remainingAttempts <= 0 {
+                    DispatchQueue.main.async { [weak self, weak webView] in
+                        guard let self, let webView else { return }
+                        self.scroll(webView, to: position, force: true)
+                    }
+                } else {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak webView] in
+                        guard let self, let webView else { return }
+                        self.waitForEnhancements(in: webView, position: position, remainingAttempts: remainingAttempts - 1)
+                    }
+                }
             }
         }
 
@@ -135,7 +215,15 @@ struct MarkdownPreview: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
             if navigationAction.navigationType == .linkActivated, let url = navigationAction.request.url {
-                NSWorkspace.shared.open(url)
+                if url.fragment != nil {
+                    decisionHandler(.allow)
+                    return
+                }
+                if url.isFileURL {
+                    parent?.onOpenLocalFile(url)
+                } else {
+                    NSWorkspace.shared.open(url)
+                }
                 decisionHandler(.cancel)
             } else {
                 decisionHandler(.allow)

@@ -16,7 +16,7 @@ struct ContentView: View {
                         .frame(width: 215)
                     Divider().opacity(0.5)
                 }
-                if document.showSidebar && document.showOutline && document.previewFileURL == nil && !document.focusMode {
+                if document.showSidebar && document.showOutline && document.previewFileURL == nil && document.isMarkdownDocument && !document.focusMode {
                     OutlinePane(scrollSync: scrollSync)
                         .frame(width: 235)
                     Divider().opacity(0.5)
@@ -24,12 +24,18 @@ struct ContentView: View {
 
                 VStack(spacing: 0) {
                     TopBar()
+                    DocumentTabBar()
+                    if let conflict = document.externalConflict {
+                        ExternalConflictBanner(conflict: conflict)
+                    }
                     Divider().opacity(0.45)
 
                     if let previewURL = document.previewFileURL {
                         ExternalFilePreview(url: previewURL)
+                            .id(document.activeTabID)
                     } else {
                         WritingWorkspace(scrollSync: scrollSync)
+                            .id(document.activeTabID)
                     }
 
                     StatusBar()
@@ -58,7 +64,7 @@ struct ContentView: View {
                 .animation(.spring(response: 0.35), value: notice)
             }
         }
-        .preferredColorScheme(document.theme == .midnight ? .dark : .light)
+        .preferredColorScheme(document.theme.isDark ? .dark : .light)
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTarget) { providers in
             guard let provider = providers.first else { return false }
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, _ in
@@ -72,6 +78,115 @@ struct ContentView: View {
         .onOpenURL { url in
             document.openFile(url)
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+            document.persistForApplicationTermination()
+        }
+        .onDisappear {
+            document.persistForApplicationTermination()
+        }
+        .sheet(isPresented: $document.showQuickOpen) {
+            QuickOpenView()
+                .environmentObject(document)
+        }
+        .sheet(isPresented: $document.showWorkspaceSearch) {
+            WorkspaceSearchView()
+                .environmentObject(document)
+        }
+        .sheet(isPresented: $document.showCommandPalette) {
+            CommandPaletteView()
+                .environmentObject(document)
+        }
+        .sheet(isPresented: $document.showDocumentHistory) {
+            DocumentHistoryView()
+                .environmentObject(document)
+        }
+        .sheet(isPresented: $document.showTableBuilder) {
+            MarkdownTableBuilderView()
+                .environmentObject(document)
+        }
+    }
+}
+
+private struct ExternalConflictBanner: View {
+    @EnvironmentObject private var document: DocumentStore
+    let conflict: ExternalFileConflict
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("File changed outside Mori").font(.system(size: 11.5, weight: .semibold))
+                Text(conflict.url.lastPathComponent + " has a newer version on disk. Choose which version to keep.")
+                    .font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer()
+            Button("Reload Disk Version") { document.reloadExternalVersion() }
+            Button("Save Mori Copy…") { document.saveConflictAs() }
+            Button("Overwrite Disk…") { document.overwriteExternalVersion() }
+                .foregroundStyle(.red)
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .padding(.horizontal, 12).frame(height: 46)
+        .background(Color.orange.opacity(document.theme.isDark ? 0.12 : 0.08))
+        .overlay(alignment: .bottom) { Divider().opacity(0.45) }
+    }
+}
+
+private struct DocumentTabBar: View {
+    @EnvironmentObject private var document: DocumentStore
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 3) {
+                    ForEach(document.openTabs) { tab in
+                        HStack(spacing: 7) {
+                            Button { document.selectTab(tab.id) } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: tab.isPreview ? "eye" : "doc.text")
+                                        .font(.system(size: 9.5))
+                                    Text(tab.title).lineLimit(1)
+                                    if tab.id == document.activeTabID ? document.isDirty : tab.isDirty {
+                                        Circle().fill(document.theme.accent).frame(width: 5, height: 5)
+                                    }
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+
+                            Button { document.closeTab(tab.id) } label: {
+                                Image(systemName: "xmark").font(.system(size: 8.5, weight: .semibold))
+                            }
+                            .buttonStyle(.plain).opacity(tab.id == document.activeTabID ? 0.8 : 0.35)
+                        }
+                        .font(.system(size: 10.5, weight: tab.id == document.activeTabID ? .semibold : .regular))
+                        .padding(.leading, 10).padding(.trailing, 7).frame(height: 29)
+                        .background(tab.id == document.activeTabID ? document.theme.accent.opacity(0.11) : Color.clear,
+                                    in: RoundedRectangle(cornerRadius: 6))
+                        .overlay(alignment: .bottom) {
+                            if tab.id == document.activeTabID {
+                                Rectangle().fill(document.theme.accent).frame(height: 1.5).padding(.horizontal, 5)
+                            }
+                        }
+                        .contextMenu {
+                            Button("Close") { document.closeTab(tab.id) }
+                            if let path = tab.filePath ?? tab.previewPath {
+                                Button("Show in Finder") { document.revealInFinder(URL(fileURLWithPath: path)) }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 7)
+            }
+            Divider().frame(height: 17)
+            Button { document.newDocument() } label: {
+                Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+            }
+            .buttonStyle(.plain).help("New tab").padding(.horizontal, 11)
+        }
+        .frame(height: 31)
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.035 : 0.022))
     }
 }
 
@@ -87,16 +202,24 @@ private struct WritingWorkspace: View {
                                command: $document.editorCommand,
                                scrollPosition: $scrollSync.position,
                                scrollSource: $scrollSync.source,
-                               theme: document.theme)
+                               theme: document.theme,
+                               typography: document.typography,
+                               settings: document.editorSettings,
+                               isMarkdown: document.isMarkdownDocument,
+                               language: document.editorLanguage,
+                               onInsertImages: document.insertImageFiles,
+                               onPasteImage: document.insertPastedImage)
                     .frame(minWidth: 360)
             }
 
-            if document.readerMode || (document.showPreview && !document.focusMode) {
+            if document.isMarkdownDocument && (document.readerMode || (document.showPreview && !document.focusMode)) {
                 MarkdownPreview(markdown: document.text,
                                 revision: document.textRevision,
                                 title: document.title,
                                 theme: document.theme,
+                                typography: document.typography,
                                 baseURL: document.fileURL?.deletingLastPathComponent(),
+                                onOpenLocalFile: document.openFile,
                                 scrollPosition: $scrollSync.position,
                                 scrollSource: $scrollSync.source)
                     .frame(minWidth: 320)
@@ -125,6 +248,7 @@ private struct TopBar: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
             .help("Navigation panels")
+            .accessibilityLabel("Navigation panels")
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
@@ -137,31 +261,96 @@ private struct TopBar: View {
 
             Spacer()
 
+            Button { document.showCommandPalette = true } label: {
+                Image(systemName: "command")
+            }
+            .buttonStyle(.borderless)
+            .help("Command palette (⇧⌘P)")
+            .accessibilityLabel("Command palette")
+
+            Button { document.showDocumentHistory = true } label: {
+                Image(systemName: "clock.arrow.circlepath")
+            }
+            .buttonStyle(.borderless)
+            .disabled(document.fileURL == nil || document.previewFileURL != nil)
+            .help("Document history (⇧⌘H)")
+            .accessibilityLabel("Document history")
+
             Picker("Theme", selection: $document.theme) {
-                ForEach(EditorTheme.allCases) { theme in Text(theme.rawValue).tag(theme) }
+                ForEach(document.availableThemes) { theme in Text(theme.name).tag(theme) }
             }
             .labelsHidden().pickerStyle(.menu).frame(width: 88)
+            .accessibilityLabel("Theme")
+
+            SettingsLink {
+                Image(systemName: "textformat.size")
+            }
+            .help("Theme and typography settings")
+            .accessibilityLabel("Theme and typography settings")
+
+            Menu {
+                Button("Bold") { document.wrapSelection(left: "**", right: "**", placeholder: "bold text") }
+                Button("Italic") { document.wrapSelection(left: "_", right: "_", placeholder: "italic text") }
+                Button("Strikethrough") { document.wrapSelection(left: "~~", right: "~~", placeholder: "struck text") }
+                Button("Link") { document.wrapSelection(left: "[", right: "](https://)", placeholder: "link text") }
+                Button("Image…") { document.chooseImagesToInsert() }
+                Button("Inline Code") { document.wrapSelection(left: "`", right: "`", placeholder: "code") }
+                Divider()
+                Button("Heading") { document.insert(prefix: "## ") }
+                Button("Bulleted List") { document.insert(prefix: "- ") }
+                Button("Numbered List") { document.insert(prefix: "1. ") }
+                Button("Block Quote") { document.insert(prefix: "> ") }
+                Button("Table…") { document.showTableBuilder = true }
+                Divider()
+                Button("Inline Math") { document.wrapSelection(left: "$", right: "$", placeholder: "E = mc^2") }
+                Button("Display Math") { document.wrapSelection(left: "$$\n", right: "\n$$", placeholder: "\\int_0^1 x^2\\,dx") }
+                Button("Fenced Code Block") { document.wrapSelection(left: "```text\n", right: "\n```", placeholder: "code") }
+            } label: {
+                Image(systemName: "textformat")
+            }
+            .menuStyle(.borderlessButton)
+            .fixedSize()
+            .disabled(document.previewFileURL != nil || !document.isMarkdownDocument || document.readerMode)
+            .help("Markdown formatting")
+            .accessibilityLabel("Markdown formatting")
 
             Button { document.focusMode.toggle() } label: {
                 Image(systemName: document.focusMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
             }
             .help("Focus mode")
+            .accessibilityLabel(document.focusMode ? "Exit focus mode" : "Enter focus mode")
+
+            Button { document.showFind() } label: {
+                Image(systemName: "magnifyingglass")
+            }
+            .disabled(document.previewFileURL != nil || document.readerMode)
+            .help("Find in document")
+            .accessibilityLabel("Find in document")
+
+            Button { document.showQuickOpen = true } label: {
+                Image(systemName: "doc.text.magnifyingglass")
+            }
+            .help("Quick open")
+            .accessibilityLabel("Quick open")
 
             Button { document.toggleReaderMode() } label: {
                 Image(systemName: document.readerMode ? "book.pages.fill" : "book.pages")
             }
-            .disabled(document.previewFileURL != nil)
+            .disabled(document.previewFileURL != nil || !document.isMarkdownDocument)
             .help(document.readerMode ? "Exit reader mode" : "Reader mode")
+            .accessibilityLabel(document.readerMode ? "Exit reader mode" : "Enter reader mode")
 
             Button { document.showPreview.toggle() } label: {
                 Image(systemName: document.showPreview ? "rectangle.righthalf.inset.filled" : "rectangle")
             }
-            .disabled(document.focusMode || document.readerMode || document.previewFileURL != nil)
+            .disabled(document.focusMode || document.readerMode || document.previewFileURL != nil || !document.isMarkdownDocument)
             .help("Toggle preview")
+            .accessibilityLabel(document.showPreview ? "Hide preview" : "Show preview")
 
             Button { document.save() } label: { Image(systemName: "square.and.arrow.down") }
                 .disabled(document.previewFileURL != nil)
                 .help("Save")
+                .accessibilityLabel("Save document")
         }
         .buttonStyle(.borderless)
         .padding(.horizontal, 14)
@@ -171,6 +360,37 @@ private struct TopBar: View {
 
 private struct SidebarView: View {
     @EnvironmentObject private var document: DocumentStore
+    @State private var workspaceSelection = Set<String>()
+    @State private var workspaceQuery = ""
+
+    private var filteredWorkspaceTree: [WorkspaceNode] {
+        let query = workspaceQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return document.displayedWorkspaceTree }
+        return document.displayedWorkspaceTree.compactMap { filter($0, query: query) }
+    }
+
+    private var selectedWorkspaceURLs: [URL] {
+        workspaceSelection
+            .map { URL(fileURLWithPath: $0).standardizedFileURL }
+            .filter { FileManager.default.fileExists(atPath: $0.path) }
+            .sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
+    }
+
+    private var pasteDestination: URL? {
+        guard let root = document.workspaceURL else { return nil }
+        let selected = selectedWorkspaceURLs
+        guard selected.count == 1, let url = selected.first else {
+            if let parent = selected.first?.deletingLastPathComponent(),
+               selected.allSatisfy({ $0.deletingLastPathComponent() == parent }) {
+                return parent
+            }
+            return root
+        }
+        var isDirectory: ObjCBool = false
+        return FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) && isDirectory.boolValue
+            ? url
+            : url.deletingLastPathComponent()
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -205,7 +425,7 @@ private struct SidebarView: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 12).padding(.bottom, 12)
 
-            List {
+            List(selection: $workspaceSelection) {
                 Group {
                     HStack {
                         Text("FOLDER")
@@ -214,6 +434,10 @@ private struct SidebarView: View {
                         if document.isLoadingWorkspace {
                             ProgressView().controlSize(.mini)
                         } else if document.workspaceURL != nil {
+                            Button { document.showWorkspaceSearch = true } label: {
+                                Image(systemName: "doc.text.magnifyingglass").font(.system(size: 9.5))
+                            }
+                            .buttonStyle(.borderless).help("Search text in folder")
                             Button { document.refreshWorkspace() } label: {
                                 Image(systemName: "arrow.clockwise").font(.system(size: 9.5))
                             }
@@ -233,6 +457,19 @@ private struct SidebarView: View {
                             Spacer()
                             Text(document.showMarkdownOnly ? "\(document.markdownFileCount)/\(document.workspaceFiles.count)" : "\(document.workspaceFiles.count)")
                                 .font(.system(size: 8.5, weight: .medium)).foregroundStyle(.secondary)
+                            Menu {
+                                Button { document.createMarkdownFile(in: root) } label: {
+                                    Label("New Markdown File", systemImage: "doc.badge.plus")
+                                }
+                                Button { document.createFolder(in: root) } label: {
+                                    Label("New Folder", systemImage: "folder.badge.plus")
+                                }
+                            } label: {
+                                Image(systemName: "plus.circle").font(.system(size: 10))
+                            }
+                            .menuStyle(.borderlessButton)
+                            .fixedSize()
+                            .help("Create an item in \(root.lastPathComponent)")
                             Button { document.showMarkdownOnly.toggle() } label: {
                                 Image(systemName: document.showMarkdownOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                                     .font(.system(size: 10))
@@ -241,9 +478,34 @@ private struct SidebarView: View {
                             .help(document.showMarkdownOnly ? "Show all files" : "Show Markdown files only")
                         }
                         .padding(.horizontal, 10).padding(.bottom, 3)
+                        .onDrop(of: WorkspaceTransfer.dropTypes, isTargeted: nil) { providers in
+                            acceptDrop(providers, into: root)
+                        }
 
-                        OutlineGroup(document.displayedWorkspaceTree, children: \.children) { node in
-                            WorkspaceNodeRow(node: node, root: root)
+                        HStack(spacing: 6) {
+                            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                            TextField("Filter files", text: $workspaceQuery)
+                                .textFieldStyle(.plain)
+                            if !workspaceQuery.isEmpty {
+                                Button { workspaceQuery = "" } label: {
+                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .font(.system(size: 10.5))
+                        .padding(.horizontal, 8).padding(.vertical, 6)
+                        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+                        .padding(.horizontal, 8).padding(.vertical, 4)
+
+                        OutlineGroup(filteredWorkspaceTree, children: \.children) { node in
+                            WorkspaceNodeRow(
+                                node: node,
+                                root: root,
+                                draggedURLs: workspaceSelection.contains(node.id) ? selectedWorkspaceURLs : [node.url],
+                                onDrop: { providers in acceptDrop(providers, into: node.url) }
+                            )
+                            .tag(node.id)
                         }
                     } else {
                         Text("Open a folder to browse all of its files.")
@@ -282,6 +544,16 @@ private struct SidebarView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .padding(.horizontal, 6)
+            .onCopyCommand { selectedWorkspaceURLs.map { WorkspaceTransfer.provider(for: $0, cut: false) } }
+            .onCutCommand { selectedWorkspaceURLs.map { WorkspaceTransfer.provider(for: $0, cut: true) } }
+            .onPasteCommand(of: WorkspaceTransfer.pasteTypes) { providers in
+                guard let destination = pasteDestination else { return }
+                let move = providers.contains { $0.hasItemConformingToTypeIdentifier(WorkspaceTransfer.cutType) }
+                WorkspaceTransfer.loadURLs(from: providers) { urls in
+                    document.pasteWorkspaceItems(urls, into: destination, move: move)
+                    workspaceSelection.removeAll()
+                }
+            }
 
             Divider().opacity(0.45)
             HStack {
@@ -294,7 +566,32 @@ private struct SidebarView: View {
             }
             .padding(14)
         }
-        .background(document.theme.foreground.opacity(document.theme == .midnight ? 0.035 : 0.025))
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.035 : 0.025))
+    }
+
+    private func acceptDrop(_ providers: [NSItemProvider], into directory: URL) -> Bool {
+        WorkspaceTransfer.loadURLs(from: providers) { urls in
+            document.handleDroppedWorkspaceItems(urls, into: directory)
+            workspaceSelection.removeAll()
+        }
+        return true
+    }
+
+    private func filter(_ node: WorkspaceNode, query: String) -> WorkspaceNode? {
+        if node.isDirectory {
+            let children = (node.children ?? []).compactMap { filter($0, query: query) }
+            if node.url.lastPathComponent.localizedCaseInsensitiveContains(query) {
+                return node
+            }
+            return children.isEmpty ? nil : WorkspaceNode(url: node.url, isDirectory: true, children: children)
+        }
+        let relativePath: String
+        if let root = document.workspaceURL, node.url.path.hasPrefix(root.path) {
+            relativePath = String(node.url.path.dropFirst(root.path.count))
+        } else {
+            relativePath = node.url.lastPathComponent
+        }
+        return relativePath.localizedCaseInsensitiveContains(query) ? node : nil
     }
 }
 
@@ -370,7 +667,7 @@ private struct OutlinePane: View {
                 .padding(.horizontal, 5).padding(.vertical, 7)
             }
         }
-        .background(document.theme.foreground.opacity(document.theme == .midnight ? 0.022 : 0.012))
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.022 : 0.012))
     }
 }
 
@@ -410,6 +707,8 @@ private struct WorkspaceNodeRow: View {
     @EnvironmentObject private var document: DocumentStore
     let node: WorkspaceNode
     let root: URL
+    let draggedURLs: [URL]
+    let onDrop: ([NSItemProvider]) -> Bool
 
     var body: some View {
         if node.isDirectory {
@@ -431,8 +730,19 @@ private struct WorkspaceNodeRow: View {
             .contentShape(Rectangle())
             .padding(.horizontal, 8).padding(.vertical, 5)
             .help("Expand or collapse \(node.url.lastPathComponent)")
+            .onDrag { WorkspaceTransfer.dragProvider(for: draggedURLs) }
+            .onDrop(of: WorkspaceTransfer.dropTypes, isTargeted: nil, perform: onDrop)
+            .contextMenu {
+                Button("New Markdown File") { document.createMarkdownFile(in: node.url) }
+                Button("New Folder") { document.createFolder(in: node.url) }
+                Divider()
+                Button("Rename…") { document.renameWorkspaceItem(node.url) }
+                Button("Show in Finder") { document.revealInFinder(node.url) }
+                Divider()
+                Button("Move to Trash", role: .destructive) { document.moveWorkspaceItemToTrash(node.url) }
+            }
         } else {
-            WorkspaceFileRow(url: node.url, root: root, showParent: false)
+            WorkspaceFileRow(url: node.url, root: root, showParent: false, draggedURLs: draggedURLs)
         }
     }
 }
@@ -442,6 +752,7 @@ private struct WorkspaceFileRow: View {
     let url: URL
     let root: URL
     var showParent = true
+    var draggedURLs: [URL]
 
     private var relativeParent: String {
         let parent = url.deletingLastPathComponent().path
@@ -461,25 +772,24 @@ private struct WorkspaceFileRow: View {
     }
 
     var body: some View {
-        Button { document.openWorkspaceFile(url) } label: {
-            HStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.system(size: 11)).foregroundStyle(document.isSupportedDocument(url) ? document.theme.accent : .secondary)
-                    .frame(width: 16)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(url.lastPathComponent)
-                        .font(.system(size: 10.5, weight: document.isSupportedDocument(url) ? .medium : .regular))
-                        .lineLimit(1)
-                    if showParent {
-                        Text(relativeParent)
-                            .font(.system(size: 8.5)).foregroundStyle(.tertiary).lineLimit(1)
-                    }
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 11)).foregroundStyle(document.isSupportedDocument(url) ? document.theme.accent : .secondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(url.lastPathComponent)
+                    .font(.system(size: 10.5, weight: document.isSupportedDocument(url) ? .medium : .regular))
+                    .lineLimit(1)
+                if showParent {
+                    Text(relativeParent)
+                        .font(.system(size: 8.5)).foregroundStyle(.tertiary).lineLimit(1)
                 }
-                Spacer(minLength: 0)
             }
-            .contentShape(Rectangle()).padding(.horizontal, 8).padding(.vertical, 4)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
+        .contentShape(Rectangle()).padding(.horizontal, 8).padding(.vertical, 4)
+        .onTapGesture(count: 2) { document.openWorkspaceFile(url) }
+        .onDrag { WorkspaceTransfer.dragProvider(for: draggedURLs) }
         .contextMenu {
             Button(document.isSupportedDocument(url) ? "Open in Mori" : "Preview in Mori") {
                 document.openWorkspaceFile(url)
@@ -488,8 +798,89 @@ private struct WorkspaceFileRow: View {
                 Button("Open in Default App") { document.openInDefaultApp(url) }
             }
             Button("Show in Finder") { document.revealInFinder(url) }
+            Divider()
+            Button("Rename…") { document.renameWorkspaceItem(url) }
+            Button("Move to Trash", role: .destructive) { document.moveWorkspaceItemToTrash(url) }
         }
         .help(url.path(percentEncoded: false))
+    }
+}
+
+private enum WorkspaceTransfer {
+    static let cutType = "com.local.mori.workspace-cut"
+    private static let selectionType = "com.local.mori.workspace-selection"
+    static let dropTypes = [UTType.fileURL.identifier, selectionType]
+    static let pasteTypes: [UTType] = [.fileURL]
+
+    static func provider(for url: URL, cut: Bool) -> NSItemProvider {
+        let provider = NSItemProvider(contentsOf: url) ?? NSItemProvider()
+        if cut {
+            provider.registerDataRepresentation(forTypeIdentifier: cutType, visibility: .all) { completion in
+                completion(Data([1]), nil)
+                return nil
+            }
+        }
+        return provider
+    }
+
+    static func dragProvider(for urls: [URL]) -> NSItemProvider {
+        let normalized = urls.map(\.standardizedFileURL)
+        guard normalized.count > 1,
+              let data = try? JSONEncoder().encode(normalized.map(\.path)) else {
+            return provider(for: normalized.first ?? URL(fileURLWithPath: "/"), cut: false)
+        }
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(forTypeIdentifier: selectionType, visibility: .all) { completion in
+            completion(data, nil)
+            return nil
+        }
+        return provider
+    }
+
+    static func loadURLs(from providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
+        guard !providers.isEmpty else { completion([]); return }
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var collected: [URL] = []
+
+        func append(_ urls: [URL]) {
+            lock.lock()
+            collected.append(contentsOf: urls)
+            lock.unlock()
+        }
+
+        for provider in providers {
+            if provider.hasItemConformingToTypeIdentifier(selectionType) {
+                group.enter()
+                provider.loadDataRepresentation(forTypeIdentifier: selectionType) { data, _ in
+                    defer { group.leave() }
+                    guard let data,
+                          let paths = try? JSONDecoder().decode([String].self, from: data) else { return }
+                    append(paths.map { URL(fileURLWithPath: $0).standardizedFileURL })
+                }
+            } else if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                group.enter()
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                    defer { group.leave() }
+                    if let url = item as? URL {
+                        append([url.standardizedFileURL])
+                    } else if let url = item as? NSURL {
+                        append([(url as URL).standardizedFileURL])
+                    } else if let data = item as? Data,
+                              let url = URL(dataRepresentation: data, relativeTo: nil) {
+                        append([url.standardizedFileURL])
+                    } else if let value = item as? String,
+                              let url = URL(string: value), url.isFileURL {
+                        append([url.standardizedFileURL])
+                    }
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            var seen = Set<String>()
+            completion(collected.filter { seen.insert($0.path).inserted })
+        }
     }
 }
 
@@ -521,14 +912,261 @@ private struct StatusBar: View {
             Spacer()
             if let url = document.previewFileURL {
                 Text(url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased())
-                Text("Quick Look preview")
+                Text(document.isImageFile(url) ? "Mori image preview" : "System preview")
             } else {
-                Text(document.readerMode ? "Reader" : "Markdown")
+                Text(document.readerMode ? "Reader" : document.documentFormat.label)
+                Menu {
+                    ForEach(document.encodingChoices) { choice in
+                        Button {
+                            document.selectEncoding(choice.rawValue)
+                        } label: {
+                            if choice.name == document.encodingLabel {
+                                Label(choice.name, systemImage: "checkmark")
+                            } else {
+                                Text(choice.name)
+                            }
+                        }
+                    }
+                } label: {
+                    Text(document.encodingLabel)
+                }
+                .menuStyle(.borderlessButton).fixedSize().help("Text encoding")
+                Menu {
+                    Picker("Line Endings", selection: $document.lineEnding) {
+                        ForEach(DocumentLineEnding.allCases) { ending in
+                            Text(ending.rawValue).tag(ending)
+                        }
+                    }
+                } label: {
+                    Text(document.lineEnding.rawValue)
+                }
+                .menuStyle(.borderlessButton).fixedSize().help("Line endings")
+                if let selection = document.selectionStats {
+                    Text("\(selection.characters) selected")
+                }
                 Text("\(document.stats.characters) characters")
                 Text("\(document.stats.words) words")
             }
         }
         .font(.system(size: 9.5, weight: .medium)).foregroundStyle(.secondary)
         .padding(.horizontal, 14).frame(height: 26)
+    }
+}
+
+private struct QuickOpenView: View {
+    @EnvironmentObject private var document: DocumentStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @FocusState private var searchFocused: Bool
+
+    private var matches: [URL] {
+        let value = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let files = document.quickOpenFiles
+        guard !value.isEmpty else { return Array(files.prefix(100)) }
+        let terms = value.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
+        return files.lazy.filter { url in
+            let candidate = url.path.lowercased()
+            return terms.allSatisfy(candidate.contains)
+        }.prefix(200).map { $0 }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").foregroundStyle(document.theme.accent)
+                TextField("Type a file name or path", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16))
+                    .focused($searchFocused)
+                    .onSubmit { if let first = matches.first { open(first) } }
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                }
+            }
+            .padding(16)
+
+            Divider()
+
+            if matches.isEmpty {
+                ContentUnavailableView("No Matching Files", systemImage: "doc.text.magnifyingglass")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List(matches, id: \.path) { url in
+                    Button { open(url) } label: {
+                        HStack(spacing: 10) {
+                            Image(systemName: quickOpenIcon(url))
+                                .foregroundStyle(document.theme.accent).frame(width: 18)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(url.lastPathComponent).font(.system(size: 12.5, weight: .medium)).lineLimit(1)
+                                Text(url.deletingLastPathComponent().path(percentEncoded: false))
+                                    .font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                        }
+                        .contentShape(Rectangle()).padding(.vertical, 3)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+            }
+
+            Divider()
+            HStack {
+                Text("↩ Open")
+                Text("⌘P Quick Open")
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .font(.caption).foregroundStyle(.secondary).padding(10)
+        }
+        .frame(width: 620, height: 430)
+        .background(document.theme.background)
+        .preferredColorScheme(document.theme.isDark ? .dark : .light)
+        .onAppear { searchFocused = true }
+    }
+
+    private func open(_ url: URL) {
+        dismiss()
+        DispatchQueue.main.async { document.openFile(url) }
+    }
+
+    private func quickOpenIcon(_ url: URL) -> String {
+        switch url.pathExtension.lowercased() {
+        case "md", "markdown": return "doc.richtext"
+        case "png", "jpg", "jpeg", "gif", "webp", "svg": return "photo"
+        case "swift", "js", "ts", "java", "py", "go", "rs", "json", "yaml", "yml": return "chevron.left.forwardslash.chevron.right"
+        case "pdf": return "doc.fill"
+        default: return "doc.text"
+        }
+    }
+}
+
+private struct WorkspaceSearchView: View {
+    @EnvironmentObject private var document: DocumentStore
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+    @State private var caseSensitive = false
+    @State private var regularExpression = false
+    @FocusState private var searchFocused: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "doc.text.magnifyingglass")
+                    .foregroundStyle(document.theme.accent)
+                TextField("Search text in every file", text: $query)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 16))
+                    .focused($searchFocused)
+                Toggle("Aa", isOn: $caseSensitive)
+                    .toggleStyle(.button)
+                    .help("Match case")
+                Toggle(".*", isOn: $regularExpression)
+                    .toggleStyle(.button)
+                    .help("Use regular expression")
+                if !query.isEmpty {
+                    Button { query = "" } label: { Image(systemName: "xmark.circle.fill") }
+                        .buttonStyle(.plain).foregroundStyle(.secondary)
+                }
+            }
+            .padding(16)
+
+            Divider()
+
+            Group {
+                if document.workspaceURL == nil {
+                    ContentUnavailableView {
+                        Label("No Folder Open", systemImage: "folder")
+                    } description: {
+                        Text("Open a folder before searching its contents.")
+                    } actions: {
+                        Button("Open Folder…") { document.chooseWorkspaceFolder() }
+                    }
+                } else if let error = document.workspaceSearchError {
+                    ContentUnavailableView("Invalid Search", systemImage: "exclamationmark.magnifyingglass",
+                                           description: Text(error))
+                } else if document.isSearchingWorkspace {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                        Text("Searching folder…").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    ContentUnavailableView("Search Folder", systemImage: "text.magnifyingglass",
+                                           description: Text("Find text across editable files in the open folder."))
+                } else if document.workspaceSearchResults.isEmpty {
+                    ContentUnavailableView("No Results", systemImage: "doc.text.magnifyingglass")
+                } else {
+                    List(document.workspaceSearchResults) { result in
+                        Button { open(result) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "doc.text")
+                                        .foregroundStyle(document.theme.accent)
+                                    Text(result.url.lastPathComponent)
+                                        .font(.system(size: 12, weight: .semibold))
+                                    Text("· \(result.line + 1):\(result.column + 1)")
+                                        .font(.system(size: 10)).foregroundStyle(.secondary)
+                                    Spacer()
+                                    Text(relativePath(for: result.url))
+                                        .font(.system(size: 9.5)).foregroundStyle(.tertiary).lineLimit(1)
+                                }
+                                Text(result.preview.isEmpty ? " " : result.preview)
+                                    .font(.system(size: 11, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            .contentShape(Rectangle())
+                            .padding(.vertical, 4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            Divider()
+            HStack {
+                if !document.workspaceSearchResults.isEmpty {
+                    Text(document.workspaceSearchResults.count >= 1_000
+                         ? "Showing first 1,000 matches"
+                         : "\(document.workspaceSearchResults.count) matches")
+                } else {
+                    Text("⇧⌘F Search in Folder")
+                }
+                Spacer()
+                Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+            }
+            .font(.caption).foregroundStyle(.secondary).padding(10)
+        }
+        .frame(width: 720, height: 520)
+        .background(document.theme.background)
+        .preferredColorScheme(document.theme.isDark ? .dark : .light)
+        .onAppear {
+            searchFocused = true
+            document.searchWorkspace(query, caseSensitive: caseSensitive, regularExpression: regularExpression)
+        }
+        .onChange(of: query) { _, _ in runSearch() }
+        .onChange(of: caseSensitive) { _, _ in runSearch() }
+        .onChange(of: regularExpression) { _, _ in runSearch() }
+    }
+
+    private func runSearch() {
+        document.searchWorkspace(query, caseSensitive: caseSensitive, regularExpression: regularExpression)
+    }
+
+    private func open(_ result: WorkspaceSearchResult) {
+        dismiss()
+        DispatchQueue.main.async { document.openWorkspaceSearchResult(result) }
+    }
+
+    private func relativePath(for url: URL) -> String {
+        guard let root = document.workspaceURL else { return url.deletingLastPathComponent().path }
+        let rootPath = root.path.hasSuffix("/") ? root.path : root.path + "/"
+        return url.path.hasPrefix(rootPath) ? String(url.path.dropFirst(rootPath.count)) : url.path
     }
 }

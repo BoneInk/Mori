@@ -8,6 +8,12 @@ struct MarkdownEditor: NSViewRepresentable {
     @Binding var scrollPosition: ScrollPosition
     @Binding var scrollSource: ScrollSource
     let theme: EditorTheme
+    let typography: TypographySettings
+    let settings: EditorBehaviorSettings
+    let isMarkdown: Bool
+    let language: String?
+    let onInsertImages: ([URL]) -> Bool
+    let onPasteImage: (NSImage) -> Bool
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -17,23 +23,35 @@ struct MarkdownEditor: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
 
-        let textView = NSTextView()
+        let textView = MoriTextView()
+        textView.onInsertImages = onInsertImages
+        textView.onPasteImage = onPasteImage
+        textView.registerForDraggedTypes([.fileURL])
         textView.delegate = context.coordinator
         textView.isRichText = false
+        textView.setAccessibilityLabel(isMarkdown ? "Markdown source editor" : "Text editor")
         textView.isAutomaticQuoteSubstitutionEnabled = false
         textView.isAutomaticDashSubstitutionEnabled = false
         textView.isAutomaticTextReplacementEnabled = false
         textView.allowsUndo = true
         textView.usesFindBar = true
+        textView.isContinuousSpellCheckingEnabled = settings.checkSpelling && isMarkdown
         textView.isVerticallyResizable = true
-        textView.isHorizontallyResizable = false
-        textView.textContainer?.widthTracksTextView = true
+        configureWrapping(textView)
         textView.textContainerInset = NSSize(width: 56, height: 48)
-        textView.font = .systemFont(ofSize: 16.5)
+        textView.font = resolvedFont(family: isMarkdown ? typography.editorFontFamily : typography.codeFontFamily,
+                                     weight: .regular,
+                                     size: typography.editorFontSize,
+                                     monospacedFallback: !isMarkdown)
         textView.string = text
         scrollView.documentView = textView
+        let lineNumberRuler = LineNumberRulerView(scrollView: scrollView, textView: textView)
+        scrollView.verticalRulerView = lineNumberRuler
+        scrollView.hasVerticalRuler = true
+        scrollView.rulersVisible = settings.showLineNumbers
         context.coordinator.textView = textView
         context.coordinator.scrollView = scrollView
+        context.coordinator.lineNumberRuler = lineNumberRuler
         scrollView.onUserScroll = { [weak coordinator = context.coordinator] in
             coordinator?.requestScrollUpdate()
         }
@@ -46,13 +64,30 @@ struct MarkdownEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
         context.coordinator.parent = self
+        textView.setAccessibilityLabel(isMarkdown ? "Markdown source editor" : "Text editor")
+        if let textView = textView as? MoriTextView {
+            textView.onInsertImages = onInsertImages
+            textView.onPasteImage = onPasteImage
+        }
+        textView.isContinuousSpellCheckingEnabled = settings.checkSpelling && isMarkdown
+        configureWrapping(textView)
+        scrollView.rulersVisible = settings.showLineNumbers
         if textView.string != text {
             textView.string = text
+            context.coordinator.lineNumberRuler?.invalidateLineNumbers()
             context.coordinator.highlight()
         }
         applyTheme(textView)
-        if context.coordinator.lastTheme != theme {
+        if context.coordinator.lastTheme != theme ||
+            context.coordinator.lastTypography != typography ||
+            context.coordinator.lastSettings != settings ||
+            context.coordinator.lastIsMarkdown != isMarkdown ||
+            context.coordinator.lastLanguage != language {
             context.coordinator.lastTheme = theme
+            context.coordinator.lastTypography = typography
+            context.coordinator.lastSettings = settings
+            context.coordinator.lastIsMarkdown = isMarkdown
+            context.coordinator.lastLanguage = language
             context.coordinator.highlight()
         }
         if scrollSource == .preview || scrollSource == .outline {
@@ -79,11 +114,34 @@ struct MarkdownEditor: NSViewRepresentable {
         ]
     }
 
+    private func configureWrapping(_ textView: NSTextView) {
+        textView.isHorizontallyResizable = !settings.wordWrap
+        textView.textContainer?.widthTracksTextView = settings.wordWrap
+        textView.textContainer?.containerSize = settings.wordWrap
+            ? NSSize(width: max(1, textView.bounds.width), height: CGFloat.greatestFiniteMagnitude)
+            : NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+    }
+
+    private func resolvedFont(family: String?, weight: NSFont.Weight, size: Double, monospacedFallback: Bool) -> NSFont {
+        if let family,
+           let selected = NSFontManager.shared.font(withFamily: family, traits: [], weight: min(15, max(0, Int(round((weight.rawValue + 1) * 7.5)))), size: size) {
+            return selected
+        }
+        return monospacedFallback
+            ? .monospacedSystemFont(ofSize: size, weight: weight)
+            : .systemFont(ofSize: size, weight: weight)
+    }
+
     final class Coordinator: NSObject, NSTextViewDelegate {
         var parent: MarkdownEditor
         weak var textView: NSTextView?
         weak var scrollView: NSScrollView?
+        fileprivate weak var lineNumberRuler: LineNumberRulerView?
         var lastTheme: EditorTheme?
+        var lastTypography: TypographySettings?
+        var lastSettings: EditorBehaviorSettings?
+        var lastIsMarkdown: Bool?
+        var lastLanguage: String?
         var lastAppliedCommand: EditorCommand?
         private var isHighlighting = false
         private var scrollObserver: NSObjectProtocol?
@@ -91,10 +149,14 @@ struct MarkdownEditor: NSViewRepresentable {
         private var lineOffsetsTextLength = -1
         private var lastScrollPublish = 0.0
         private var pendingScrollUpdate: DispatchWorkItem?
+        private var pendingHighlight: DispatchWorkItem?
+        private var currentLineHighlightRange: NSRange?
+        private var isApplyingAutomaticPair = false
 
         init(_ parent: MarkdownEditor) { self.parent = parent }
 
         deinit {
+            pendingHighlight?.cancel()
             if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
         }
 
@@ -135,6 +197,8 @@ struct MarkdownEditor: NSViewRepresentable {
                   let textView,
                   let layoutManager = textView.layoutManager,
                   let textContainer = textView.textContainer else { return }
+            lineNumberRuler?.needsDisplay = true
+            if textView.string.utf16.count > 750_000 { scheduleHighlight() }
             rebuildLineOffsetsIfNeeded()
             let containerY = max(0, scrollView.contentView.bounds.minY - textView.textContainerOrigin.y)
             var glyphFraction: CGFloat = 0
@@ -196,16 +260,182 @@ struct MarkdownEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard !isHighlighting, let textView else { return }
+            lineNumberRuler?.invalidateLineNumbers()
+            lineOffsetsTextLength = -1
             if parent.text != textView.string {
                 parent.text = textView.string
-                highlight()
+                if textView.string.utf16.count < 40_000 {
+                    highlight()
+                } else {
+                    scheduleHighlight()
+                    updateCurrentLineHighlight()
+                }
             }
+        }
+
+        private func scheduleHighlight() {
+            pendingHighlight?.cancel()
+            let work = DispatchWorkItem { [weak self] in
+                self?.pendingHighlight = nil
+                self?.highlight()
+            }
+            pendingHighlight = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.09, execute: work)
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView else { return }
             let range = textView.selectedRange()
             if parent.selection != range { parent.selection = range }
+            updateCurrentLineHighlight()
+            if parent.settings.typewriterMode {
+                DispatchQueue.main.async { [weak self] in self?.centerInsertionPoint() }
+            }
+        }
+
+        func textView(_ textView: NSTextView,
+                      shouldChangeTextIn affectedCharRange: NSRange,
+                      replacementString: String?) -> Bool {
+            guard parent.settings.autoPairDelimiters,
+                  !isApplyingAutomaticPair,
+                  let replacementString,
+                  replacementString.utf16.count == 1 else { return true }
+            let source = textView.string as NSString
+            let openingPairs: [Character: Character] = parent.isMarkdown
+                ? ["(": ")", "[": "]", "{": "}", "`": "`"]
+                : ["(": ")", "[": "]", "{": "}", "\"": "\"", "'": "'", "`": "`"]
+            guard let character = replacementString.first else { return true }
+
+            if openingPairs.values.contains(character), affectedCharRange.length == 0,
+               affectedCharRange.location < source.length,
+               source.substring(with: NSRange(location: affectedCharRange.location, length: 1)) == replacementString {
+                textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1, length: 0))
+                return false
+            }
+            guard let closing = openingPairs[character] else { return true }
+            if affectedCharRange.location > 0,
+               source.substring(with: NSRange(location: affectedCharRange.location - 1, length: 1)) == "\\" {
+                return true
+            }
+            let selected = affectedCharRange.length > 0 ? source.substring(with: affectedCharRange) : ""
+            let pair = replacementString + selected + String(closing)
+            isApplyingAutomaticPair = true
+            textView.insertText(pair, replacementRange: affectedCharRange)
+            isApplyingAutomaticPair = false
+            textView.setSelectedRange(NSRange(location: affectedCharRange.location + 1,
+                                              length: (selected as NSString).length))
+            return false
+        }
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            if commandSelector == #selector(NSResponder.insertTab(_:)) {
+                return handleIndent(in: textView, outdent: false)
+            }
+            if commandSelector == #selector(NSResponder.insertBacktab(_:)) {
+                return handleIndent(in: textView, outdent: true)
+            }
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)),
+                  textView.selectedRange().length == 0 else { return false }
+            let selection = textView.selectedRange()
+            let source = textView.string as NSString
+            let lineRange = source.lineRange(for: NSRange(location: selection.location, length: 0))
+            let beforeLength = max(0, selection.location - lineRange.location)
+            let before = source.substring(with: NSRange(location: lineRange.location, length: beforeLength))
+
+            if parent.isMarkdown, let continuation = markdownContinuation(for: before) {
+                if continuation.shouldExit {
+                    textView.insertText("", replacementRange: NSRange(location: lineRange.location, length: beforeLength))
+                } else {
+                    textView.insertText("\n\(continuation.prefix)", replacementRange: selection)
+                }
+                return true
+            }
+
+            let indentation = String(before.prefix { $0 == " " || $0 == "\t" })
+            guard !indentation.isEmpty || !parent.isMarkdown else { return false }
+            var nextIndentation = indentation
+            if !parent.isMarkdown,
+               let last = before.trimmingCharacters(in: .whitespaces).last,
+               ["{", "[", "("].contains(last) {
+                nextIndentation += String(repeating: " ", count: parent.settings.tabWidth)
+            }
+            textView.insertText("\n\(nextIndentation)", replacementRange: selection)
+            return true
+        }
+
+        private func handleIndent(in textView: NSTextView, outdent: Bool) -> Bool {
+            let range = textView.selectedRange()
+            let source = textView.string as NSString
+            let lineRange = source.lineRange(for: range)
+            if !outdent, range.length == 0 {
+                let currentLine = source.substring(with: NSRange(location: lineRange.location,
+                                                                  length: range.location - lineRange.location))
+                let column = currentLine.reduce(into: 0) { count, character in
+                    count += character == "\t" ? parent.settings.tabWidth : 1
+                }
+                let count = max(1, parent.settings.tabWidth - column % parent.settings.tabWidth)
+                textView.insertText(String(repeating: " ", count: count), replacementRange: range)
+                return true
+            }
+
+            let original = source.substring(with: lineRange)
+            let hasTrailingNewline = original.hasSuffix("\n")
+            var lines = original.components(separatedBy: "\n")
+            if hasTrailingNewline, lines.last == "" { lines.removeLast() }
+            let indent = String(repeating: " ", count: parent.settings.tabWidth)
+            var removedFromFirstLine = 0
+            let transformed = lines.enumerated().map { index, line -> String in
+                guard outdent else { return indent + line }
+                if line.hasPrefix("\t") {
+                    if index == 0 { removedFromFirstLine = 1 }
+                    return String(line.dropFirst())
+                }
+                let spaces = min(parent.settings.tabWidth, line.prefix { $0 == " " }.count)
+                if index == 0 { removedFromFirstLine = spaces }
+                return String(line.dropFirst(spaces))
+            }.joined(separator: "\n") + (hasTrailingNewline ? "\n" : "")
+            textView.insertText(transformed, replacementRange: lineRange)
+            if range.length == 0 {
+                let location = outdent
+                    ? max(lineRange.location, range.location - removedFromFirstLine)
+                    : range.location
+                textView.setSelectedRange(NSRange(location: location, length: 0))
+            } else {
+                textView.setSelectedRange(NSRange(location: lineRange.location,
+                                                  length: (transformed as NSString).length))
+            }
+            return true
+        }
+
+        private func markdownContinuation(for line: String) -> (prefix: String, shouldExit: Bool)? {
+            let patterns = [
+                #"^(\s*)([-+*])\s+(\[[ xX]\]\s+)?(.*)$"#,
+                #"^(\s*)(\d+)([.)])\s+(.*)$"#,
+                #"^(\s*)(>+)\s+(.*)$"#
+            ]
+            for (patternIndex, pattern) in patterns.enumerated() {
+                guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+                let source = line as NSString
+                guard let match = regex.firstMatch(in: line, range: NSRange(location: 0, length: source.length)) else { continue }
+                let indent = source.substring(with: match.range(at: 1))
+                switch patternIndex {
+                case 0:
+                    let marker = source.substring(with: match.range(at: 2))
+                    let task = match.range(at: 3).location == NSNotFound ? "" : "[ ] "
+                    let content = source.substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                    return ("\(indent)\(marker) \(task)", content.isEmpty)
+                case 1:
+                    let number = Int(source.substring(with: match.range(at: 2))) ?? 0
+                    let punctuation = source.substring(with: match.range(at: 3))
+                    let content = source.substring(with: match.range(at: 4)).trimmingCharacters(in: .whitespaces)
+                    return ("\(indent)\(number + 1)\(punctuation) ", content.isEmpty)
+                default:
+                    let marker = source.substring(with: match.range(at: 2))
+                    let content = source.substring(with: match.range(at: 3)).trimmingCharacters(in: .whitespaces)
+                    return ("\(indent)\(marker) ", content.isEmpty)
+                }
+            }
+            return nil
         }
 
         func apply(_ command: EditorCommand) {
@@ -217,6 +447,10 @@ struct MarkdownEditor: NSViewRepresentable {
                 let lineRange = nsText.lineRange(for: range)
                 textView.insertText(prefix, replacementRange: NSRange(location: lineRange.location, length: 0))
                 textView.setSelectedRange(NSRange(location: range.location + (prefix as NSString).length, length: range.length))
+            case .insertAtSelection(let value):
+                let range = textView.selectedRange()
+                textView.insertText(value, replacementRange: range)
+                textView.setSelectedRange(NSRange(location: range.location + (value as NSString).length, length: 0))
             case .wrap(let left, let right, let placeholder):
                 let range = textView.selectedRange()
                 let selected = range.length > 0 ? (textView.string as NSString).substring(with: range) : placeholder
@@ -227,6 +461,16 @@ struct MarkdownEditor: NSViewRepresentable {
                 textView.setSelectedRange(range)
                 textView.scrollRangeToVisible(range)
                 textView.window?.makeFirstResponder(textView)
+            case .showFind:
+                textView.window?.makeFirstResponder(textView)
+                let item = NSMenuItem()
+                item.tag = NSTextFinder.Action.showFindInterface.rawValue
+                textView.performTextFinderAction(item)
+            case .showReplace:
+                textView.window?.makeFirstResponder(textView)
+                let item = NSMenuItem()
+                item.tag = NSTextFinder.Action.showReplaceInterface.rawValue
+                textView.performTextFinderAction(item)
             }
             if parent.text != textView.string {
                 parent.text = textView.string
@@ -236,43 +480,197 @@ struct MarkdownEditor: NSViewRepresentable {
 
         func highlight() {
             guard let textView, let storage = textView.textStorage else { return }
+            pendingHighlight?.cancel()
+            pendingHighlight = nil
             isHighlighting = true
-            lineOffsets = [0]
-            for (index, unit) in textView.string.utf16.enumerated() where unit == 10 {
-                lineOffsets.append(index + 1)
-            }
-            lineOffsetsTextLength = (textView.string as NSString).length
+            lastTheme = parent.theme
+            lastTypography = parent.typography
+            lastSettings = parent.settings
+            lastIsMarkdown = parent.isMarkdown
+            lastLanguage = parent.language
             let whole = NSRange(location: 0, length: storage.length)
+            let target = highlightRange(in: textView, whole: whole)
             let base = NSColor(parent.theme.foreground)
             storage.beginEditing()
+            currentLineHighlightRange = nil
             storage.setAttributes([
-                .font: NSFont.systemFont(ofSize: 16.5),
+                .font: parent.isMarkdown ? editorFont(weight: .regular) : codeFont(weight: .regular),
                 .foregroundColor: base,
                 .paragraphStyle: paragraphStyle()
-            ], range: whole)
-            apply(#"(?m)^(#{1,6})\s+(.+)$"#, color: NSColor(parent.theme.foreground), font: .systemFont(ofSize: 19, weight: .bold), storage: storage)
-            apply(#"(?s)```.*?```"#, color: NSColor(parent.theme.accent), font: .monospacedSystemFont(ofSize: 14, weight: .regular), storage: storage)
-            apply(#"`[^`\n]+`"#, color: NSColor(parent.theme.accent), font: .monospacedSystemFont(ofSize: 14, weight: .regular), storage: storage)
-            apply(#"(?m)</?[A-Za-z][^>\n]*>"#, color: NSColor(parent.theme.accent), font: .monospacedSystemFont(ofSize: 14, weight: .regular), storage: storage)
-            apply(#"(?m)^(>|-|\*|\d+\.)\s"#, color: NSColor(parent.theme.accent), font: .systemFont(ofSize: 16.5, weight: .semibold), storage: storage)
+            ], range: target)
+            if parent.isMarkdown {
+                apply(#"(?m)^(#{1,6})\s+(.+)$"#, color: NSColor(parent.theme.foreground), font: editorFont(weight: .bold, size: parent.typography.editorFontSize + 2.5), storage: storage, range: target)
+                apply(#"(?s)(?:```.*?```|~~~.*?~~~)"#, color: NSColor(parent.theme.accent), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 2.5)), storage: storage, range: target)
+                apply(#"(?s)(?:\$\$.*?\$\$|\\\[.*?\\\])"#, color: NSColor(Color(hex: parent.theme.syntaxTypeHex)), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 1.5)), storage: storage, range: target)
+                apply(#"(?m)(?<!\\)\$(?!\s)[^$\n]+?(?<!\s|\\)\$"#, color: NSColor(Color(hex: parent.theme.syntaxTypeHex)), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 1.5)), storage: storage, range: target)
+                apply(#"(?m)^\[\^[^\]]+\]:|\[\^[^\]]+\]"#, color: NSColor(Color(hex: parent.theme.syntaxNumberHex)), font: editorFont(weight: .semibold), storage: storage, range: target)
+                apply(#"`[^`\n]+`"#, color: NSColor(parent.theme.accent), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 2.5)), storage: storage, range: target)
+                apply(#"(?m)</?[A-Za-z][^>\n]*>"#, color: NSColor(parent.theme.accent), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 2.5)), storage: storage, range: target)
+                apply(#"(?m)^(>|-|\*|\d+\.)\s"#, color: NSColor(parent.theme.accent), font: editorFont(weight: .semibold), storage: storage, range: target)
+            } else if storage.length <= 2_000_000 {
+                highlightSource(storage, range: target)
+            }
             storage.endEditing()
             isHighlighting = false
+            updateCurrentLineHighlight()
+            lineNumberRuler?.needsDisplay = true
         }
 
-        private func apply(_ pattern: String, color: NSColor, font: NSFont, storage: NSTextStorage) {
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return }
-            let range = NSRange(location: 0, length: storage.length)
+        private func highlightSource(_ storage: NSTextStorage, range: NSRange) {
+            let language = parent.language?.lowercased() ?? "text"
+            let keywords: [String: String] = [
+                "swift": "actor as async await break case catch class continue default defer do else enum extension false fileprivate final for func guard if import in init internal is let nil open override private protocol public repeat return self static struct super switch throw throws true try typealias var where while",
+                "java": "abstract boolean break byte case catch char class continue default do double else enum extends false final finally float for if implements import instanceof int interface long native new null package private protected public return short static super switch synchronized this throw throws true try void volatile while",
+                "javascript": "async await break case catch class const continue debugger default delete do else export extends false finally for from function get if import in instanceof let new null of return set static super switch this throw true try typeof undefined var void while yield",
+                "typescript": "abstract any as async await boolean break case catch class const constructor continue declare default delete do else enum export extends false finally for from function if implements import in interface keyof let namespace never new null number object private protected public readonly return static string super switch symbol this throw true try type undefined unknown var void while",
+                "python": "and as assert async await break class continue def del elif else except false finally for from global if import in is lambda none nonlocal not or pass raise return true try while with yield match case",
+                "go": "break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var true false nil",
+                "rust": "as async await break const continue crate dyn else enum extern false fn for if impl in let loop match mod move mut pub ref return self static struct super trait true type unsafe use where while",
+                "kotlin": "as break class continue do else false for fun if in interface is null object package return super this throw true try typealias val var when while import private protected public override suspend",
+                "cpp": "auto bool break case catch char class const continue default delete do double else enum explicit extern false float for friend if inline int long namespace new nullptr operator private protected public return short signed sizeof static struct switch template this throw true try typedef typename union unsigned using virtual void volatile while",
+                "sql": "add all alter and as asc between by case create database delete desc distinct drop exists from full group having in index inner insert into is join left like limit not null or order outer primary right select set table union unique update values view where with",
+                "shell": "case do done elif else esac export fi for function if in local readonly return set shift then trap unset until while",
+                "ruby": "alias and begin break case class def defined do else elsif end ensure false for if in module next nil not or rescue retry return self super then true unless until when while yield"
+            ]
+            if let list = keywords[language] {
+                let terms = list.split(separator: " ").map { NSRegularExpression.escapedPattern(for: String($0)) }.joined(separator: "|")
+                apply("\\b(?:\(terms))\\b", color: NSColor(Color(hex: parent.theme.syntaxKeywordHex)), font: codeFont(weight: .semibold), storage: storage, options: language == "sql" ? [.caseInsensitive] : [], range: range)
+            }
+            apply(#"\b(?:0x[0-9A-Fa-f]+|\d+(?:\.\d+)?)\b"#, color: NSColor(Color(hex: parent.theme.syntaxNumberHex)), font: codeFont(weight: .regular), storage: storage, range: range)
+            apply(#"\"(?:\\.|[^\"\\])*\"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`"#, color: NSColor(Color(hex: parent.theme.syntaxStringHex)), font: codeFont(weight: .regular), storage: storage, range: range)
+            if ["html", "xml"].contains(language) {
+                apply(#"</?[A-Za-z][^>]*>"#, color: NSColor(Color(hex: parent.theme.syntaxTagHex)), font: codeFont(weight: .semibold), storage: storage, range: range)
+                apply(#"<!--[\s\S]*?-->"#, color: NSColor(Color(hex: parent.theme.syntaxCommentHex)), font: codeFont(weight: .regular), storage: storage, range: range)
+            } else {
+                let comments: String
+                switch language {
+                case "python", "ruby", "shell", "yaml": comments = #"(?m)#[^\n]*$"#
+                case "sql": comments = #"(?m)--[^\n]*$|/\*[\s\S]*?\*/"#
+                default: comments = #"(?m)//[^\n]*$|/\*[\s\S]*?\*/"#
+                }
+                apply(comments, color: NSColor(Color(hex: parent.theme.syntaxCommentHex)), font: codeFont(weight: .regular), storage: storage, range: range)
+            }
+        }
+
+        private func apply(_ pattern: String,
+                           color: NSColor,
+                           font: NSFont,
+                           storage: NSTextStorage,
+                           options: NSRegularExpression.Options = [],
+                           range: NSRange) {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: options) else { return }
             regex.enumerateMatches(in: storage.string, range: range) { result, _, _ in
                 guard let result else { return }
                 storage.addAttributes([.foregroundColor: color, .font: font], range: result.range)
             }
         }
 
+        private func highlightRange(in textView: NSTextView, whole: NSRange) -> NSRange {
+            guard whole.length > 750_000,
+                  let layoutManager = textView.layoutManager,
+                  let container = textView.textContainer else { return whole }
+            let glyphs = layoutManager.glyphRange(forBoundingRect: textView.visibleRect.insetBy(dx: 0, dy: -1200), in: container)
+            let visibleCharacters = layoutManager.characterRange(forGlyphRange: glyphs, actualGlyphRange: nil)
+            let start = max(0, visibleCharacters.location - 8_000)
+            let end = min(whole.length, visibleCharacters.location + visibleCharacters.length + 8_000)
+            return NSRange(location: start, length: max(0, end - start))
+        }
+
         private func paragraphStyle() -> NSParagraphStyle {
             let style = NSMutableParagraphStyle()
-            style.lineSpacing = 5
+            style.lineSpacing = parent.typography.editorLineSpacing
             style.paragraphSpacing = 3
+            let spaceWidth = codeFont(weight: .regular).advancement(forGlyph: codeFont(weight: .regular).glyph(withName: "space")).width
+            style.defaultTabInterval = max(1, spaceWidth) * CGFloat(parent.settings.tabWidth)
+            style.tabStops = []
             return style
+        }
+
+        private func updateCurrentLineHighlight() {
+            guard !isHighlighting, let textView, let storage = textView.textStorage else { return }
+            if let previous = currentLineHighlightRange,
+               previous.location + previous.length <= storage.length {
+                storage.removeAttribute(.backgroundColor, range: previous)
+            }
+            currentLineHighlightRange = nil
+            guard parent.settings.highlightCurrentLine, storage.length > 0 else { return }
+            let location = min(textView.selectedRange().location, storage.length)
+            let line = (textView.string as NSString).lineRange(for: NSRange(location: location, length: 0))
+            storage.addAttribute(.backgroundColor, value: NSColor(parent.theme.accent).withAlphaComponent(parent.theme.isDark ? 0.08 : 0.055), range: line)
+            currentLineHighlightRange = line
+        }
+
+        private func centerInsertionPoint() {
+            guard let textView, let scrollView else { return }
+            let range = textView.selectedRange()
+            guard let layoutManager = textView.layoutManager,
+                  let container = textView.textContainer else { return }
+            let glyph = layoutManager.glyphRange(forCharacterRange: NSRange(location: min(range.location, textView.string.utf16.count), length: 0), actualCharacterRange: nil)
+            let rect = layoutManager.boundingRect(forGlyphRange: glyph, in: container)
+            let target = textView.textContainerOrigin.y + rect.midY - scrollView.contentView.bounds.height / 2
+            let maximum = max(0, textView.bounds.height - scrollView.contentView.bounds.height)
+            scrollView.contentView.scroll(to: NSPoint(x: scrollView.contentView.bounds.minX, y: min(maximum, max(0, target))))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
+
+        private func editorFont(weight: NSFont.Weight, size: Double? = nil) -> NSFont {
+            resolvedFont(family: parent.typography.editorFontFamily,
+                         weight: weight,
+                         size: size ?? parent.typography.editorFontSize,
+                         monospacedFallback: false)
+        }
+
+        private func codeFont(weight: NSFont.Weight, size: Double? = nil) -> NSFont {
+            resolvedFont(family: parent.typography.codeFontFamily,
+                         weight: weight,
+                         size: size ?? max(11, parent.typography.editorFontSize - (parent.isMarkdown ? 2 : 0)),
+                         monospacedFallback: true)
+        }
+
+        private func resolvedFont(family: String?, weight: NSFont.Weight, size: Double, monospacedFallback: Bool) -> NSFont {
+            if let family,
+               let selected = NSFontManager.shared.font(withFamily: family, traits: [], weight: min(15, max(0, Int(round((weight.rawValue + 1) * 7.5)))), size: size) {
+                return selected
+            }
+            return monospacedFallback
+                ? .monospacedSystemFont(ofSize: size, weight: weight)
+                : .systemFont(ofSize: size, weight: weight)
+        }
+    }
+}
+
+private final class MoriTextView: NSTextView {
+    var onInsertImages: (([URL]) -> Bool)?
+    var onPasteImage: ((NSImage) -> Bool)?
+
+    override func paste(_ sender: Any?) {
+        if let image = NSPasteboard.general.readObjects(forClasses: [NSImage.self])?.first as? NSImage,
+           onPasteImage?(image) == true {
+            return
+        }
+        super.paste(sender)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
+        imageURLs(from: sender.draggingPasteboard).isEmpty ? super.draggingEntered(sender) : .copy
+    }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        imageURLs(from: sender.draggingPasteboard).isEmpty ? super.draggingUpdated(sender) : .copy
+    }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        let urls = imageURLs(from: sender.draggingPasteboard)
+        guard !urls.isEmpty else { return super.performDragOperation(sender) }
+        let point = convert(sender.draggingLocation, from: nil)
+        setSelectedRange(NSRange(location: characterIndexForInsertion(at: point), length: 0))
+        return onInsertImages?(urls) == true
+    }
+
+    private func imageURLs(from pasteboard: NSPasteboard) -> [URL] {
+        let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+        return (pasteboard.readObjects(forClasses: [NSURL.self], options: options) as? [URL] ?? []).filter {
+            NSImage(contentsOf: $0) != nil
         }
     }
 }
@@ -283,5 +681,83 @@ private final class UserTrackingScrollView: NSScrollView {
     override func scrollWheel(with event: NSEvent) {
         super.scrollWheel(with: event)
         DispatchQueue.main.async { [weak self] in self?.onUserScroll?() }
+    }
+}
+
+private final class LineNumberRulerView: NSRulerView {
+    private weak var textView: NSTextView?
+    private var lineStarts: [Int] = [0]
+    private var needsLineRebuild = true
+
+    init(scrollView: NSScrollView, textView: NSTextView) {
+        self.textView = textView
+        super.init(scrollView: scrollView, orientation: .verticalRuler)
+        clientView = textView
+        ruleThickness = 46
+    }
+
+    required init(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func invalidateLineNumbers() {
+        needsLineRebuild = true
+        needsDisplay = true
+    }
+
+    override func drawHashMarksAndLabels(in rect: NSRect) {
+        guard let textView,
+              let layoutManager = textView.layoutManager,
+              let container = textView.textContainer else { return }
+        rebuildLineStartsIfNeeded(textView.string)
+
+        NSColor.windowBackgroundColor.withAlphaComponent(0.25).setFill()
+        rect.fill()
+
+        let visible = textView.visibleRect
+        let glyphRange = layoutManager.glyphRange(forBoundingRect: visible, in: container)
+        let characterRange = layoutManager.characterRange(forGlyphRange: glyphRange, actualGlyphRange: nil)
+        let startLine = lineIndex(containing: characterRange.location)
+        let endCharacter = min((textView.string as NSString).length, characterRange.location + characterRange.length + 1)
+        let endLine = lineIndex(containing: endCharacter)
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 9.5, weight: .regular),
+            .foregroundColor: NSColor.secondaryLabelColor
+        ]
+
+        if textView.string.isEmpty {
+            ("1" as NSString).draw(at: NSPoint(x: ruleThickness - 14, y: textView.textContainerInset.height - visible.minY),
+                                   withAttributes: attributes)
+            return
+        }
+
+        for line in startLine...min(endLine, lineStarts.count - 1) {
+            let character = min(lineStarts[line], max(0, (textView.string as NSString).length - 1))
+            let glyph = layoutManager.glyphIndexForCharacter(at: character)
+            var lineRange = NSRange()
+            let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyph, effectiveRange: &lineRange)
+            let y = textView.textContainerOrigin.y + fragment.minY - visible.minY
+            let label = "\(line + 1)" as NSString
+            let size = label.size(withAttributes: attributes)
+            label.draw(at: NSPoint(x: ruleThickness - size.width - 8, y: y + max(0, (fragment.height - size.height) / 2)),
+                       withAttributes: attributes)
+        }
+    }
+
+    private func rebuildLineStartsIfNeeded(_ text: String) {
+        guard needsLineRebuild else { return }
+        needsLineRebuild = false
+        lineStarts = [0]
+        for (index, unit) in text.utf16.enumerated() where unit == 10 { lineStarts.append(index + 1) }
+    }
+
+    private func lineIndex(containing character: Int) -> Int {
+        var low = 0
+        var high = lineStarts.count
+        while low < high {
+            let middle = (low + high) / 2
+            if lineStarts[middle] <= character { low = middle + 1 } else { high = middle }
+        }
+        return max(0, low - 1)
     }
 }

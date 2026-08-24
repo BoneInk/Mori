@@ -18,6 +18,7 @@ let package = Package(
                 .linkedFramework("AppKit"),
                 .linkedFramework("WebKit"),
                 .linkedFramework("Quartz"),
+                .linkedFramework("ImageIO"),
                 .linkedFramework("UniformTypeIdentifiers")
             ]
         )
