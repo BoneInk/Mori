@@ -1,63 +1,85 @@
 # Mori
 
-Mori is a native macOS Markdown editor built for a calm, focused writing experience.
+简体中文 | [English](README_EN.md)
 
-## Features
+Mori 是一款原生 macOS Markdown 编辑器，为安静、专注的写作体验而打造。
 
-- Native Markdown editor with lightweight syntax highlighting
-- Live rendered preview with eight built-in light and dark themes
-- Custom theme editor with palette duplication, JSON import/export, and persistent selection
-- Independent writing, preview, and code font choices with adjustable size, line spacing, line height, and reading width
-- Private TTF, OTF, and TTC font import; imported fonts stay inside Mori and do not modify system fonts
-- Configurable line numbers, current-line highlight, spelling, line wrapping, typewriter mode, tab width, and autosave delay
-- Optional bracket/quote auto-pairing plus selection-aware Tab and Shift-Tab indentation using the configured tab width
-- GitHub-style Markdown tables with alignment and responsive overflow
-- Visual Markdown table builder with configurable rows, columns, per-column alignment, and source preview
-- Safe inline and block HTML elements, including styled spans, details, media, and relative local images
-- Markdown image workflow for file selection, Finder drag-and-drop, and clipboard images; assets are copied beside the document with collision-safe relative links
-- Offline syntax highlighting for fenced code blocks across common languages
-- Offline Mermaid diagrams for sequence, flowchart, class, state, ER, and Gantt syntax
-- Offline KaTeX mathematics with accessible MathML for inline `$…$`, display `$$…$$`, and `\\[…\\]` forms
-- Footnotes, Setext headings, strikethrough, task lists, variable-length inline code spans, backtick/tilde code fences, tables, and safe HTML extensions
-- Additional CommonMark-compatible cases including escaped punctuation, multi-line blockquotes, nested mixed/task lists, reference-style links and images, spaced thematic breaks, `+` list markers, `)` ordered markers, non-1 ordered starts, closing ATX hashes, and angle-bracket link destinations
-- Source-line anchored synchronization between editor and preview
-- Long-document performance path with debounced background rendering, cached document analysis, and visible-range syntax highlighting for very large files
-- Reader mode for a clean, formatted-only view
-- Outline navigation in both editing and reader modes
-- Local links clicked in rendered Markdown open as editable or preview tabs inside Mori
-- Document outline and heading navigation
-- Persistent recent-files directory with Finder actions
-- Virtualized, recursive folder tree with expandable subdirectories and support for all file types
-- Workspace filename/path filtering and a `⌘P` Quick Open palette across workspace and recent files
-- Asynchronous folder-wide full-text search with case-sensitive and regular-expression modes (`⇧⌘F`)
-- Workspace file operations for creating, renaming, dragging, copying, cutting, pasting, and moving items to Trash
-- Optional Markdown-only folder filter
-- In-app system previews for PDF, Office, media, and other non-text binary formats
-- Editable text and source files with encoding preservation and language-aware syntax highlighting
-- Preserved UTF/legacy encodings and LF/CRLF/CR line endings, with per-document encoding and line-ending controls in the status bar
-- Native, downsampled image previews with zoom controls (without Quick Look)
-- Finder/Open With registration for text, source, Markdown, image, and PDF documents
-- Dedicated vertical document-outline column
-- Independently closable file-library and outline panels
-- Open, drag-and-drop, save, autosave, and Save As
-- Crash-safe recovery snapshots for unsaved drafts, with file writing kept off the UI thread
-- Synchronous session checkpoint on window close and application termination, covering edits made immediately before quitting
-- External-file change monitoring with conflict-safe autosave, reload, overwrite, and Save As recovery choices
-- Single-window document tabs for Markdown, source, text, images, and binary previews, including restored tab sessions and duplicate-open prevention
-- Focus mode and reading statistics
-- HTML and print-ready PDF export with theme, typography, local media, tables, code highlighting, and Mermaid diagrams preserved
-- Native macOS print workflow with A4-aware pagination styles
-- Keyboard shortcuts and native macOS menus
-- VoiceOver labels for primary navigation, editing, preview, formatting, history, and save controls
-- Standard `⇧⌘F` folder search, `⇧⌘J` focus mode, and `⌥⌘I` image insertion shortcuts
-- Native Find/Replace, Go to Line, and an expanded Markdown formatting command palette
-- Searchable keyboard command palette (`⇧⌘P`) spanning files, navigation, formatting, export, views, themes, and settings
-- Per-document local history with preview and one-click restore; each document is capped at 30 versions and 64 MB
-- Smart Return handling for Markdown lists, task items, ordered lists, quotes, and source-code indentation
+## 界面预览
 
-## Diagrams
+### 编辑与实时预览
 
-Use a `mermaid` fenced code block to render diagrams in the live preview:
+工作区文件和文档大纲与语法高亮源码编辑器、同步实时预览并排显示。
+
+![Mori 的文件树、文档大纲、Markdown 源码和实时预览](docs/images/editor-preview.png)
+
+### 阅读模式
+
+阅读模式为格式化后的文档提供更大空间，同时保留工作区和章节导航。
+
+![Mori 阅读模式与工作区、文档大纲](docs/images/reader-mode.png)
+
+### 离线 Mermaid 图表
+
+Mermaid 源码可以在无网络环境下直接渲染到预览区。
+
+![Mori 编辑并预览离线 Mermaid 时序图](docs/images/mermaid-preview.png)
+
+## 功能特性
+
+- 原生 Markdown 编辑器，支持轻量语法高亮
+- 实时渲染预览，内置 8 套明亮与深色主题
+- 自定义主题编辑器，支持复制配色、JSON 导入/导出和选择持久化
+- 写作、预览和代码字体可独立设置，支持调整字号、行距、行高和阅读宽度
+- 私有导入 TTF、OTF 和 TTC 字体；字体仅保存在 Mori 内，不会修改系统字体
+- 可配置行号、当前行高亮、拼写检查、自动换行、打字机模式、Tab 宽度和自动保存延迟
+- 可选括号/引号自动配对，Tab 与 Shift-Tab 根据设置宽度对选中内容缩进
+- 支持 GitHub 风格 Markdown 表格、对齐方式和自适应溢出
+- 可视化 Markdown 表格构建器，可配置行列、每列对齐方式并预览源码
+- 支持安全的行内与块级 HTML 元素，包括样式化 span、details、媒体和相对路径本地图片
+- Markdown 图片工作流支持文件选择、Finder 拖放和剪贴板图片；资源会复制到文档旁边并生成避免冲突的相对链接
+- 常见语言代码块的离线语法高亮
+- 离线 Mermaid 图表，支持时序图、流程图、类图、状态图、ER 图和甘特图
+- 离线 KaTeX 数学公式，支持行内 `$…$`、块级 `$$…$$` 和 `\\[…\\]`，并生成可访问的 MathML
+- 支持脚注、Setext 标题、删除线、任务列表、可变长行内代码、反引号/波浪号代码块、表格和安全 HTML 扩展
+- 额外 CommonMark 兼容：转义标点、多行引用、嵌套混合/任务列表、引用式链接与图片、空格分隔线、`+` 列表标记、`)` 有序列表标记、非 1 起始序号、ATX 结尾 `#` 和尖括号链接目标
+- 编辑器与预览区基于源码行锚点进行同步
+- 长文档性能优化：后台防抖渲染、文档分析缓存和超大文件可见区域语法高亮
+- 纯格式化阅读模式
+- 编辑模式和阅读模式均支持大纲导航
+- 在渲染后的 Markdown 中点击本地链接，可在 Mori 内以可编辑或预览标签打开
+- 文档大纲与标题快速导航
+- 持久化最近文件列表和 Finder 操作
+- 虚拟化递归文件树，支持展开子目录和所有文件类型
+- 按工作区文件名/路径过滤，并提供覆盖工作区与最近文件的 `⌘P` 快速打开面板
+- 异步文件夹全文搜索，支持区分大小写和正则表达式模式（`⇧⌘F`）
+- 工作区文件操作：创建、重命名、拖放、复制、剪切、粘贴和移到废纸篓
+- 可选择仅显示 Markdown 文件
+- 在应用内预览 PDF、Office、媒体和其他非文本二进制格式
+- 支持编辑文本和源码文件，保留编码并按语言高亮
+- 保留 UTF/传统编码以及 LF/CRLF/CR 换行符，状态栏可按文档控制编码与换行符
+- 原生降采样图片预览和缩放控制，不使用快速查看
+- 向 Finder 注册文本、源码、Markdown、图片和 PDF 文档的“打开方式”
+- 独立的纵向文档大纲栏
+- 文件库和大纲面板可分别关闭
+- 支持打开、拖放、保存、自动保存和另存为
+- 未保存草稿的防崩溃恢复快照，文件写入始终在 UI 线程之外执行
+- 关闭窗口或退出应用时同步保存会话检查点，包含退出前最后时刻的编辑
+- 监控外部文件变更，提供冲突安全的自动保存、重新加载、覆盖和另存为处理方案
+- 单窗口文档标签，支持 Markdown、源码、文本、图片和二进制预览，包含会话恢复与防止重复打开
+- 专注模式和阅读统计
+- 导出 HTML 和可直接打印的 PDF，保留主题、排版、本地媒体、表格、代码高亮和 Mermaid 图表
+- 原生 macOS 打印流程与 A4 分页样式
+- 键盘快捷键和原生 macOS 菜单
+- 主要导航、编辑、预览、格式化、历史和保存控件均提供 VoiceOver 标签
+- 标准快捷键：`⇧⌘F` 文件夹搜索、`⇧⌘J` 专注模式和 `⌥⌘I` 插入图片
+- 原生查找/替换、跳转到行和扩展的 Markdown 格式命令面板
+- 可搜索的键盘命令面板（`⇧⌘P`），覆盖文件、导航、格式化、导出、视图、主题和设置
+- 每篇文档均有本地历史，支持预览和一键恢复；每篇文档最多 30 个版本、64 MB
+- Markdown 列表、任务项、有序列表、引用和源码缩进的智能回车处理
+
+## 图表
+
+使用 `mermaid` 围栏代码块，即可在实时预览中渲染图表：
 
 ````markdown
 ```mermaid
@@ -67,23 +89,23 @@ sequenceDiagram
 ```
 ````
 
-The bundled renderer works offline. See [`Examples/Mermaid.md`](Examples/Mermaid.md) for more examples.
+内置渲染器可完全离线工作。更多示例请查看 [`Examples/Mermaid.md`](Examples/Mermaid.md)。
 
-Diagram rendering uses the MIT-licensed `@mermaid-js/tiny` runtime bundled with the application.
+图表渲染使用应用内置的 MIT 许可 `@mermaid-js/tiny` 运行时。
 
-Mathematics rendering uses the MIT-licensed KaTeX runtime and bundled WOFF2 math fonts. It works without a network connection and is preserved in HTML, PDF, and print output. See [`Examples/Markdown-Compatibility.md`](Examples/Markdown-Compatibility.md).
+数学公式使用 MIT 许可的 KaTeX 运行时和内置 WOFF2 数学字体。它可以离线工作，并保留在 HTML、PDF 和打印输出中。详见 [`Examples/Markdown-Compatibility.md`](Examples/Markdown-Compatibility.md)。
 
-## Themes and fonts
+## 主题与字体
 
-Open **Mori → Settings** (or press **⌘,**) to choose an included skin, create a custom palette, or configure typography. A custom skin can be exported as a `.mori-theme.json` file and imported on another Mac.
+打开 **Mori → 设置**（或按 **⌘,**）可选择内置外观、创建自定义配色或配置排版。自定义外观可导出为 `.mori-theme.json` 文件，并导入到另一台 Mac。
 
-Imported font files are stored in `~/Library/Application Support/Mori/Fonts` and registered only while Mori is running. Removing an imported font from Settings moves Mori's private copy to Trash.
+导入的字体保存在 `~/Library/Application Support/Mori/Fonts`，仅在 Mori 运行时注册。从设置中移除字体时，Mori 会将它的私有副本移到废纸篓。
 
-Saved document versions are stored privately in `~/Library/Application Support/Mori/History`. Mori keeps at most 30 versions and 64 MB per document, throttles autosave snapshots, and carries history forward when workspace files or folders are renamed.
+文档历史版本私有保存在 `~/Library/Application Support/Mori/History`。Mori 为每篇文档最多保留 30 个版本和 64 MB，限流自动保存快照，并在工作区文件或文件夹重命名时继承历史。
 
-## Build
+## 构建
 
-Requires macOS 14 or newer and the Swift 6 toolchain.
+需要 macOS 14 或更高版本，以及 Swift 6 工具链。
 
 ```bash
 chmod +x scripts/build-app.sh
@@ -91,10 +113,10 @@ chmod +x scripts/build-app.sh
 open dist/Mori.app
 ```
 
-For development:
+开发模式：
 
 ```bash
 swift run Mori
 ```
 
-The release build creates a Universal 2 (`arm64` + `x86_64`) `dist/Mori.app` and applies an ad-hoc local signature. No full Xcode installation is required.
+发布构建会生成 Universal 2（`arm64` + `x86_64`）的 `dist/Mori.app`，并应用本地临时签名。无需安装完整 Xcode。
