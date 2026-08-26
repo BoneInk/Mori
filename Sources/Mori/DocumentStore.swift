@@ -1672,9 +1672,9 @@ final class DocumentStore: ObservableObject {
             openTabs = restored
             let selected = restored.first(where: { $0.id == session.activeTabID }) ?? restored[0]
             loadTab(selected)
-            notice = restored.contains(where: \.isDirty)
+            flash(restored.contains(where: \.isDirty)
                 ? "Recovered \(restored.count) tabs with unsaved changes"
-                : "Restored \(restored.count) tabs"
+                : "Restored \(restored.count) tabs")
             return true
         }
         guard let snapshot = try? decoder.decode(RecoverySnapshot.self, from: data), !snapshot.text.isEmpty else { return false }
@@ -1685,7 +1685,7 @@ final class DocumentStore: ObservableObject {
                                      isDirty: true, selectionLocation: 0, selectionLength: 0, readerMode: false)
         openTabs = [legacy]
         loadTab(legacy)
-        notice = "Recovered an unsaved draft"
+        flash("Recovered an unsaved draft")
         return true
     }
 

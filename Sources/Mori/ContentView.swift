@@ -1,8 +1,23 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private enum MoriMotion {
+    static let fast = Animation.easeOut(duration: 0.14)
+    static let control = Animation.easeInOut(duration: 0.2)
+    static let panel = Animation.spring(response: 0.32, dampingFraction: 0.88)
+}
+
+private func withMoriAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
+    if reduceMotion {
+        updates()
+    } else {
+        withAnimation(MoriMotion.panel, updates)
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isDropTarget = false
     @State private var scrollSync = ScrollSyncState()
 
@@ -14,10 +29,12 @@ struct ContentView: View {
                 if document.showSidebar && document.showFileLibrary && !document.focusMode {
                     SidebarView()
                         .frame(minWidth: 180, idealWidth: 220, maxWidth: 420)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
                 }
                 if document.showSidebar && document.showOutline && document.previewFileURL == nil && document.isMarkdownDocument && !document.focusMode {
                     OutlinePane(scrollSync: scrollSync)
                         .frame(minWidth: 180, idealWidth: 215, maxWidth: 440)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
                 }
 
                 VStack(spacing: 0) {
@@ -25,15 +42,18 @@ struct ContentView: View {
                     DocumentTabBar()
                     if let conflict = document.externalConflict {
                         ExternalConflictBanner(conflict: conflict)
+                            .transition(.move(edge: .top).combined(with: .opacity))
                     }
                     Divider().opacity(0.45)
 
                     if let previewURL = document.previewFileURL {
                         ExternalFilePreview(url: previewURL)
                             .id(document.activeTabID)
+                            .transition(.opacity)
                     } else {
                         WritingWorkspace(scrollSync: scrollSync)
                             .id(document.activeTabID)
+                            .transition(.opacity)
                     }
 
                     StatusBar()
@@ -48,6 +68,7 @@ struct ContentView: View {
                     .background(document.theme.accent.opacity(0.08), in: RoundedRectangle(cornerRadius: 18))
                     .padding(24)
                     .allowsHitTesting(false)
+                    .transition(.opacity.combined(with: .scale(scale: 0.985)))
             }
 
             if let notice = document.notice {
@@ -61,10 +82,17 @@ struct ContentView: View {
                         .padding(.bottom, 42)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.35), value: notice)
+                .animation(reduceMotion ? nil : .spring(response: 0.35), value: notice)
             }
         }
+        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showFileLibrary)
+        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showOutline)
+        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showSidebar)
+        .animation(reduceMotion ? nil : MoriMotion.control, value: document.focusMode)
+        .animation(reduceMotion ? nil : MoriMotion.fast, value: isDropTarget)
+        .animation(reduceMotion ? nil : MoriMotion.control, value: document.externalConflict)
         .preferredColorScheme(document.theme.isDark ? .dark : .light)
+        .ignoresSafeArea(.container, edges: .top)
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTarget) { providers in
             guard let provider = providers.first else { return false }
             provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { data, _ in
@@ -135,50 +163,28 @@ private struct ExternalConflictBanner: View {
 
 private struct DocumentTabBar: View {
     @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         HStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 0) {
                     ForEach(document.openTabs) { tab in
-                        HStack(spacing: 6) {
-                            Button { document.selectTab(tab.id) } label: {
-                                HStack(spacing: 6) {
-                                    Image(systemName: tab.isPreview ? "eye" : "doc.text")
-                                        .font(.system(size: 9.5))
-                                    Text(tab.title).lineLimit(1)
-                                    if tab.id == document.activeTabID ? document.isDirty : tab.isDirty {
-                                        Circle().fill(document.theme.accent).frame(width: 5, height: 5)
-                                    }
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-
-                            Button { document.closeTab(tab.id) } label: {
-                                Image(systemName: "xmark").font(.system(size: 8.5, weight: .semibold))
-                            }
-                            .buttonStyle(.plain).opacity(tab.id == document.activeTabID ? 0.8 : 0.35)
-                        }
-                        .font(.system(size: 10.5, weight: tab.id == document.activeTabID ? .medium : .regular))
-                        .padding(.leading, 10).padding(.trailing, 7).frame(height: 33)
-                        .overlay(alignment: .bottom) {
-                            if tab.id == document.activeTabID {
-                                Rectangle().fill(document.theme.accent).frame(height: 2).padding(.horizontal, 7)
-                            }
-                        }
-                        .contextMenu {
-                            Button("Close") { document.closeTab(tab.id) }
-                            if let path = tab.filePath ?? tab.previewPath {
-                                Button("Show in Finder") { document.revealInFinder(URL(fileURLWithPath: path)) }
-                            }
-                        }
+                        DocumentTabItem(tab: tab)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .leading)),
+                                removal: .opacity
+                            ))
                     }
                 }
                 .padding(.horizontal, 5)
+                .animation(reduceMotion ? nil : MoriMotion.control,
+                           value: document.openTabs.map(\.id))
             }
             Divider().frame(height: 17)
-            Button { document.newDocument() } label: {
+            Button {
+                withMoriAnimation(reduceMotion) { document.newDocument() }
+            } label: {
                 Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
             }
             .buttonStyle(.plain).help("New tab").padding(.horizontal, 11)
@@ -188,65 +194,224 @@ private struct DocumentTabBar: View {
     }
 }
 
-private struct WritingWorkspace: View {
+private struct DocumentTabItem: View {
     @EnvironmentObject private var document: DocumentStore
-    @ObservedObject var scrollSync: ScrollSyncState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let tab: OpenDocumentTab
+    @State private var isHovered = false
+
+    private var isActive: Bool { tab.id == document.activeTabID }
+    private var isDirty: Bool { isActive ? document.isDirty : tab.isDirty }
 
     var body: some View {
-        HSplitView {
-            if !document.readerMode {
-                MarkdownEditor(text: $document.text,
-                               selection: $document.selectedRange,
-                               command: $document.editorCommand,
-                               scrollPosition: $scrollSync.position,
-                               scrollSource: $scrollSync.source,
-                               theme: document.theme,
-                               typography: document.typography,
-                               settings: document.editorSettings,
-                               isMarkdown: document.isMarkdownDocument,
-                               language: document.editorLanguage,
-                               onInsertImages: document.insertImageFiles,
-                               onPasteImage: document.insertPastedImage)
-                    .frame(minWidth: 360)
+        HStack(spacing: 6) {
+            Button { document.selectTab(tab.id) } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: tab.isPreview ? "eye" : "doc.text")
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(isActive ? document.theme.accent : .secondary)
+                    Text(tab.title).lineLimit(1)
+                    if isDirty {
+                        Circle().fill(document.theme.accent).frame(width: 5, height: 5)
+                    }
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
 
-            if document.isMarkdownDocument && (document.readerMode || (document.showPreview && !document.focusMode)) {
-                MarkdownPreview(markdown: document.text,
-                                revision: document.textRevision,
-                                title: document.title,
-                                theme: document.theme,
-                                typography: document.typography,
-                                baseURL: document.fileURL?.deletingLastPathComponent(),
-                                onOpenLocalFile: document.openFile,
-                                scrollPosition: $scrollSync.position,
-                                scrollSource: $scrollSync.source)
-                    .frame(minWidth: 320)
+            Button {
+                withMoriAnimation(reduceMotion) { document.closeTab(tab.id) }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 8.5, weight: .semibold))
+                    .frame(width: 14, height: 14)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .opacity(isActive || isHovered ? 0.75 : 0)
+        }
+        .font(.system(size: 10.5, weight: isActive ? .medium : .regular))
+        .padding(.leading, 10).padding(.trailing, 7).frame(height: 33)
+        .background {
+            if isHovered && !isActive {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(document.theme.foreground.opacity(document.theme.isDark ? 0.07 : 0.045))
+                    .padding(.vertical, 3)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if isActive {
+                Rectangle().fill(document.theme.accent).frame(height: 2).padding(.horizontal, 7)
+            }
+        }
+        .onHover { hovering in
+            if reduceMotion {
+                isHovered = hovering
+            } else {
+                withAnimation(MoriMotion.fast) { isHovered = hovering }
+            }
+        }
+        .animation(reduceMotion ? nil : MoriMotion.fast, value: isActive)
+        .contextMenu {
+            Button("Close") { document.closeTab(tab.id) }
+            if let path = tab.filePath ?? tab.previewPath {
+                Button("Show in Finder") { document.revealInFinder(URL(fileURLWithPath: path)) }
             }
         }
     }
 }
 
+private struct WritingWorkspace: View {
+    @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject var scrollSync: ScrollSyncState
+
+    var body: some View {
+        HSplitView {
+            if !document.readerMode {
+                VStack(spacing: 0) {
+                    WorkspacePaneHeader(
+                        title: document.isMarkdownDocument ? "MARKDOWN" : document.documentFormat.label.uppercased(),
+                        detail: "Source"
+                    )
+                    ZStack(alignment: .topLeading) {
+                        MarkdownEditor(text: $document.text,
+                                       selection: $document.selectedRange,
+                                       command: $document.editorCommand,
+                                       scrollPosition: $scrollSync.position,
+                                       scrollSource: $scrollSync.source,
+                                       theme: document.theme,
+                                       typography: document.typography,
+                                       settings: document.editorSettings,
+                                       isMarkdown: document.isMarkdownDocument,
+                                       language: document.editorLanguage,
+                                       onInsertImages: document.insertImageFiles,
+                                       onPasteImage: document.insertPastedImage)
+                        if document.text.isEmpty {
+                            Text(document.isMarkdownDocument ? "Start writing in Markdown…" : "Start writing…")
+                                .font(.system(size: CGFloat(document.typography.editorFontSize)))
+                                .foregroundStyle(document.theme.foreground.opacity(0.28))
+                                .padding(.leading, 45).padding(.top, 35)
+                                .allowsHitTesting(false)
+                                .transition(.opacity)
+                        }
+                    }
+                }
+                .frame(minWidth: 360)
+                .transition(.move(edge: .leading).combined(with: .opacity))
+            }
+
+            if document.isMarkdownDocument && (document.readerMode || (document.showPreview && !document.focusMode)) {
+                VStack(spacing: 0) {
+                    WorkspacePaneHeader(title: "PREVIEW", detail: document.readerMode ? "Reader" : "Live sync")
+                    ZStack {
+                        MarkdownPreview(markdown: document.text,
+                                        revision: document.textRevision,
+                                        title: document.title,
+                                        theme: document.theme,
+                                        typography: document.typography,
+                                        baseURL: document.fileURL?.deletingLastPathComponent(),
+                                        onOpenLocalFile: document.openFile,
+                                        scrollPosition: $scrollSync.position,
+                                        scrollSource: $scrollSync.source)
+                        if document.text.isEmpty && document.readerMode {
+                            ContentUnavailableView(
+                                "Nothing to read yet",
+                                systemImage: "doc.text",
+                                description: Text("Switch to Edit and start writing.")
+                            )
+                            .foregroundStyle(.secondary)
+                            .allowsHitTesting(false)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                        }
+                    }
+                }
+                .frame(minWidth: 320)
+                .transition(.move(edge: .trailing).combined(with: .opacity))
+            }
+        }
+        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.readerMode)
+        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showPreview)
+        .animation(reduceMotion ? nil : MoriMotion.control, value: document.focusMode)
+        .animation(reduceMotion ? nil : MoriMotion.fast, value: document.text.isEmpty)
+    }
+}
+
+private struct WorkspacePaneHeader: View {
+    @EnvironmentObject private var document: DocumentStore
+    let title: String
+    let detail: String
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.system(size: 9.5, weight: .semibold))
+                .tracking(0.45)
+            Spacer()
+            Text(detail)
+                .font(.system(size: 9, weight: .regular))
+                .foregroundStyle(.tertiary)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 16)
+        .frame(height: 30)
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.015 : 0.006))
+        .overlay(alignment: .bottom) { Divider().opacity(0.35) }
+    }
+}
+
 private struct TopBar: View {
     @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var hasLeadingNavigationPane: Bool {
+        guard document.showSidebar, !document.focusMode else { return false }
+        if document.showFileLibrary { return true }
+        return document.showOutline && document.previewFileURL == nil && document.isMarkdownDocument
+    }
 
     var body: some View {
         HStack(spacing: 8) {
-            Menu {
-                Button { document.showFileLibrary.toggle(); document.showSidebar = true } label: {
-                    Label("File Library", systemImage: document.showFileLibrary ? "checkmark.square.fill" : "square")
+            Button {
+                withMoriAnimation(reduceMotion) {
+                    if !document.showSidebar {
+                        document.showSidebar = true
+                        document.showFileLibrary = true
+                    } else {
+                        document.showFileLibrary.toggle()
+                    }
                 }
-                Button { document.showOutline.toggle(); document.showSidebar = true } label: {
-                    Label("Document Outline", systemImage: document.showOutline ? "checkmark.square.fill" : "square")
-                }
-                Divider()
-                Button("Toggle All Navigation") { document.toggleNavigation() }
             } label: {
                 Image(systemName: "sidebar.left")
+                    .foregroundStyle(document.showSidebar && document.showFileLibrary ? document.theme.accent : .secondary)
+                    .scaleEffect(document.showSidebar && document.showFileLibrary ? 1 : 0.93)
             }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-            .help("Navigation panels")
-            .accessibilityLabel("Navigation panels")
+            .help(document.showFileLibrary ? "Hide file library" : "Show file library")
+            .accessibilityLabel("File library")
+            .accessibilityAddTraits(document.showSidebar && document.showFileLibrary ? .isSelected : [])
+
+            Button {
+                withMoriAnimation(reduceMotion) {
+                    if !document.showSidebar {
+                        document.showSidebar = true
+                        document.showOutline = true
+                    } else {
+                        document.showOutline.toggle()
+                    }
+                }
+            } label: {
+                Image(systemName: "list.bullet")
+                    .foregroundStyle(document.showSidebar && document.showOutline ? document.theme.accent : .secondary)
+                    .scaleEffect(document.showSidebar && document.showOutline ? 1 : 0.93)
+            }
+            .disabled(document.previewFileURL != nil || !document.isMarkdownDocument)
+            .help(document.showOutline ? "Hide document outline" : "Show document outline")
+            .accessibilityLabel("Document outline")
+            .accessibilityAddTraits(document.showSidebar && document.showOutline ? .isSelected : [])
+
+            Divider()
+                .frame(height: 20)
+                .padding(.horizontal, 2)
 
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
@@ -256,10 +421,15 @@ private struct TopBar: View {
                 Text(document.displayURL?.deletingLastPathComponent().path(percentEncoded: false) ?? "Not yet saved")
                     .font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
             }
+            .frame(minWidth: 110, maxWidth: 360, alignment: .leading)
+            .layoutPriority(1)
 
             Spacer()
 
-            WorkspaceModeControl()
+            ViewThatFits(in: .horizontal) {
+                WorkspaceModeControl()
+                WorkspaceModeControl(compact: true)
+            }
 
             Button { document.showQuickOpen = true } label: {
                 Image(systemName: "magnifyingglass")
@@ -276,14 +446,19 @@ private struct TopBar: View {
             MoreActionsMenu()
         }
         .buttonStyle(.borderless)
-        .padding(.horizontal, 12)
-        .frame(height: 46)
+        .padding(.leading, hasLeadingNavigationPane ? 12 : 76)
+        .padding(.trailing, 12)
+        .frame(height: 52)
         .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
+        .animation(reduceMotion ? nil : MoriMotion.control, value: document.showFileLibrary)
+        .animation(reduceMotion ? nil : MoriMotion.control, value: document.showOutline)
     }
 }
 
 private struct WorkspaceModeControl: View {
     @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var compact = false
 
     private var isEditing: Bool { !document.readerMode && !document.showPreview }
     private var isSplit: Bool { !document.readerMode && document.showPreview }
@@ -315,17 +490,25 @@ private struct WorkspaceModeControl: View {
                             systemImage: String,
                             isActive: Bool,
                             action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: systemImage)
-                .labelStyle(.titleAndIcon)
+        Button {
+            withMoriAnimation(reduceMotion, action)
+        } label: {
+            Group {
+                if compact {
+                    Image(systemName: systemImage)
+                } else {
+                    Label(title, systemImage: systemImage)
+                }
+            }
                 .font(.system(size: 9.5, weight: .medium))
                 .foregroundStyle(isActive ? document.theme.accent : .secondary)
-                .padding(.horizontal, 7)
+                .padding(.horizontal, compact ? 6 : 7)
                 .frame(height: 24)
                 .background(isActive ? document.theme.background : Color.clear,
                             in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : MoriMotion.control, value: isActive)
         .accessibilityLabel(title + " mode")
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
@@ -394,6 +577,7 @@ private struct MarkdownFormattingMenu: View {
 
 private struct SidebarView: View {
     @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workspaceSelection = Set<String>()
     @State private var workspaceQuery = ""
 
@@ -433,16 +617,22 @@ private struct SidebarView: View {
                     RoundedRectangle(cornerRadius: 6).fill(document.theme.accent)
                     Image(systemName: "leaf.fill").foregroundStyle(.white).font(.system(size: 10.5))
                 }.frame(width: 24, height: 24)
-                Text("Mori").font(.system(size: 15, weight: .semibold))
+                Text("Mori")
+                    .font(.system(size: 15, weight: .semibold))
+                    .lineLimit(1)
+                    .fixedSize()
                 Spacer()
-                Button { document.showFileLibrary = false } label: {
+                Button {
+                    withMoriAnimation(reduceMotion) { document.showFileLibrary = false }
+                } label: {
                     Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
                 }
                 .buttonStyle(.borderless).help("Close file library")
             }
-            .padding(.horizontal, 14).frame(height: 48)
+            .padding(.leading, 76).padding(.trailing, 14).frame(height: 52)
+            .overlay(alignment: .bottom) { Divider().opacity(0.45) }
 
-            HStack(spacing: 4) {
+            HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("WORKSPACE")
                         .font(.system(size: 9, weight: .semibold)).tracking(1).foregroundStyle(.tertiary)
@@ -452,145 +642,139 @@ private struct SidebarView: View {
                 Spacer(minLength: 4)
                 Button { document.newDocument() } label: { Image(systemName: "doc.badge.plus") }
                     .help("New document")
-                Button { document.openDocument() } label: { Image(systemName: "folder") }
-                    .help("Open file")
-                Button { document.chooseWorkspaceFolder() } label: { Image(systemName: "folder.badge.plus") }
-                    .help(document.workspaceURL == nil ? "Open folder" : "Change folder")
+                Menu {
+                    Button("Open File…", systemImage: "doc") { document.openDocument() }
+                    Button(document.workspaceURL == nil ? "Open Folder…" : "Change Folder…",
+                           systemImage: "folder") { document.chooseWorkspaceFolder() }
+                    if let root = document.workspaceURL {
+                        Divider()
+                        Button("New Markdown File", systemImage: "doc.badge.plus") {
+                            document.createMarkdownFile(in: root)
+                        }
+                        Button("New Folder", systemImage: "folder.badge.plus") {
+                            document.createFolder(in: root)
+                        }
+                        Divider()
+                        Button("Search in Folder", systemImage: "doc.text.magnifyingglass") {
+                            document.showWorkspaceSearch = true
+                        }
+                        Button("Refresh", systemImage: "arrow.clockwise") { document.refreshWorkspace() }
+                        Button(document.showMarkdownOnly ? "Show All Files" : "Show Markdown Only",
+                               systemImage: "line.3.horizontal.decrease.circle") {
+                            document.showMarkdownOnly.toggle()
+                        }
+                        Divider()
+                        Button("Close Folder", systemImage: "xmark.circle") { document.closeWorkspaceFolder() }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis")
+                }
+                .menuStyle(.borderlessButton)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help("Workspace actions")
             }
             .buttonStyle(.borderless)
             .font(.system(size: 11))
-            .padding(.horizontal, 14).padding(.vertical, 10)
-            .overlay(alignment: .bottom) { Divider().opacity(0.45) }
+            .padding(.horizontal, 14)
+            .frame(height: 66)
 
-            List(selection: $workspaceSelection) {
-                Group {
-                    HStack {
-                        Text("FILES")
-                            .font(.system(size: 9.5, weight: .semibold)).tracking(1).foregroundStyle(.secondary)
-                        Spacer()
-                        if document.isLoadingWorkspace {
-                            ProgressView().controlSize(.mini)
-                        } else if document.workspaceURL != nil {
-                            Button { document.showWorkspaceSearch = true } label: {
-                                Image(systemName: "doc.text.magnifyingglass").font(.system(size: 9.5))
-                            }
-                            .buttonStyle(.borderless).help("Search text in folder")
-                            Button { document.refreshWorkspace() } label: {
-                                Image(systemName: "arrow.clockwise").font(.system(size: 9.5))
-                            }
-                            .buttonStyle(.borderless).help("Refresh folder")
-                            Button { document.closeWorkspaceFolder() } label: {
-                                Image(systemName: "xmark.circle").font(.system(size: 9.5))
-                            }
-                            .buttonStyle(.borderless).help("Close folder")
+            if let root = document.workspaceURL {
+                HStack(spacing: 7) {
+                    Image(systemName: "magnifyingglass").foregroundStyle(.tertiary)
+                    TextField("Filter files", text: $workspaceQuery)
+                        .textFieldStyle(.plain)
+                    if document.isLoadingWorkspace {
+                        ProgressView().controlSize(.mini)
+                    } else if !workspaceQuery.isEmpty {
+                        Button { workspaceQuery = "" } label: {
+                            Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                         }
+                        .buttonStyle(.plain)
                     }
-                    .padding(.horizontal, 10).padding(.top, 9).padding(.bottom, 5)
+                }
+                .font(.system(size: 10.5))
+                .padding(.horizontal, 8)
+                .frame(height: 30)
+                .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 6))
+                .padding(.horizontal, 12).padding(.bottom, 8)
 
-                    if let root = document.workspaceURL {
-                        HStack(spacing: 6) {
-                            Image(systemName: "folder").foregroundStyle(document.theme.accent)
-                            Text(root.lastPathComponent).font(.system(size: 11, weight: .semibold)).lineLimit(1)
-                            Spacer()
-                            Text(document.showMarkdownOnly ? "\(document.markdownFileCount)/\(document.workspaceFiles.count)" : "\(document.workspaceFiles.count)")
-                                .font(.system(size: 8.5, weight: .medium)).foregroundStyle(.secondary)
-                            Menu {
-                                Button { document.createMarkdownFile(in: root) } label: {
-                                    Label("New Markdown File", systemImage: "doc.badge.plus")
-                                }
-                                Button { document.createFolder(in: root) } label: {
-                                    Label("New Folder", systemImage: "folder.badge.plus")
-                                }
-                            } label: {
-                                Image(systemName: "plus.circle").font(.system(size: 10))
-                            }
-                            .menuStyle(.borderlessButton)
-                            .fixedSize()
-                            .help("Create an item in \(root.lastPathComponent)")
-                            Button { document.showMarkdownOnly.toggle() } label: {
-                                Image(systemName: document.showMarkdownOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                                    .font(.system(size: 10))
-                            }
-                            .buttonStyle(.borderless)
-                            .help(document.showMarkdownOnly ? "Show all files" : "Show Markdown files only")
-                        }
-                        .padding(.horizontal, 10).padding(.bottom, 3)
-                        .onDrop(of: WorkspaceTransfer.dropTypes, isTargeted: nil) { providers in
-                            acceptDrop(providers, into: root)
-                        }
-
-                        HStack(spacing: 6) {
-                            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                            TextField("Filter files", text: $workspaceQuery)
-                                .textFieldStyle(.plain)
-                            if !workspaceQuery.isEmpty {
-                                Button { workspaceQuery = "" } label: {
-                                    Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .font(.system(size: 10.5))
-                        .padding(.horizontal, 8).padding(.vertical, 6)
-                        .background(.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
-                        .padding(.horizontal, 8).padding(.vertical, 4)
-
-                        OutlineGroup(filteredWorkspaceTree, children: \.children) { node in
-                            WorkspaceNodeRow(
-                                node: node,
-                                root: root,
-                                draggedURLs: workspaceSelection.contains(node.id) ? selectedWorkspaceURLs : [node.url],
-                                onDrop: { providers in acceptDrop(providers, into: node.url) }
+                List(selection: $workspaceSelection) {
+                    Group {
+                        if filteredWorkspaceTree.isEmpty {
+                            SidebarEmptyState(
+                                systemImage: workspaceQuery.isEmpty ? "folder" : "doc.text.magnifyingglass",
+                                title: workspaceQuery.isEmpty ? "This folder is empty" : "No matching files",
+                                detail: workspaceQuery.isEmpty ? "Create a document to get started." : "Try a different file name."
                             )
-                            .tag(node.id)
-                        }
-                    } else {
-                        Text("Open a folder to browse all of its files.")
-                            .font(.system(size: 10.5)).foregroundStyle(.tertiary)
-                            .padding(.horizontal, 10).padding(.bottom, 8)
-                    }
-
-                    Divider().opacity(0.35).padding(.horizontal, 7).padding(.vertical, 10)
-
-                    HStack {
-                        Text("RECENT")
-                            .font(.system(size: 9.5, weight: .semibold)).tracking(1).foregroundStyle(.secondary)
-                        Spacer()
-                        if !document.recentFiles.isEmpty {
-                            Button { document.clearRecentFiles() } label: {
-                                Image(systemName: "trash").font(.system(size: 9))
+                        } else {
+                            OutlineGroup(filteredWorkspaceTree, children: \.children) { node in
+                                WorkspaceNodeRow(
+                                    node: node,
+                                    root: root,
+                                    isSelected: workspaceSelection.contains(node.id),
+                                    draggedURLs: workspaceSelection.contains(node.id) ? selectedWorkspaceURLs : [node.url],
+                                    onDrop: { providers in acceptDrop(providers, into: node.url) }
+                                )
+                                .tag(node.id)
+                                .listRowBackground(Color.clear)
                             }
-                            .buttonStyle(.borderless).help("Clear recent files")
                         }
                     }
-                    .padding(.horizontal, 10).padding(.bottom, 4)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 7)
+                .onDrop(of: WorkspaceTransfer.dropTypes, isTargeted: nil) { providers in
+                    acceptDrop(providers, into: root)
+                }
+                .onCopyCommand { selectedWorkspaceURLs.map { WorkspaceTransfer.provider(for: $0, cut: false) } }
+                .onCutCommand { selectedWorkspaceURLs.map { WorkspaceTransfer.provider(for: $0, cut: true) } }
+                .onPasteCommand(of: WorkspaceTransfer.pasteTypes) { providers in
+                    guard let destination = pasteDestination else { return }
+                    let move = providers.contains { $0.hasItemConformingToTypeIdentifier(WorkspaceTransfer.cutType) }
+                    WorkspaceTransfer.loadURLs(from: providers) { urls in
+                        document.pasteWorkspaceItems(urls, into: destination, move: move)
+                        workspaceSelection.removeAll()
+                    }
+                }
+            } else {
+                SidebarEmptyState(
+                    systemImage: "folder.badge.plus",
+                    title: "No folder open",
+                    detail: "Open a folder to browse and manage its files.",
+                    actionTitle: "Open Folder",
+                    action: document.chooseWorkspaceFolder
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            }
 
-                    if document.recentFiles.isEmpty {
-                        Text("Files you open will appear here.")
-                            .font(.system(size: 10.5)).foregroundStyle(.tertiary)
-                            .padding(.horizontal, 10)
-                    } else {
-                        ForEach(document.recentFiles, id: \.path) { url in
-                            RecentFileRow(url: url)
-                        }
+            VStack(alignment: .leading, spacing: 1) {
+                HStack {
+                    Text("RECENT")
+                        .font(.system(size: 9.5, weight: .semibold)).tracking(1).foregroundStyle(.tertiary)
+                    Spacer()
+                    if !document.recentFiles.isEmpty {
+                        Button("Clear") { document.clearRecentFiles() }
+                            .buttonStyle(.plain).font(.system(size: 9.5)).foregroundStyle(.tertiary)
                     }
                 }
-                .listRowInsets(EdgeInsets())
-                .listRowSeparator(.hidden)
-            }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .padding(.horizontal, 6)
-            .onCopyCommand { selectedWorkspaceURLs.map { WorkspaceTransfer.provider(for: $0, cut: false) } }
-            .onCutCommand { selectedWorkspaceURLs.map { WorkspaceTransfer.provider(for: $0, cut: true) } }
-            .onPasteCommand(of: WorkspaceTransfer.pasteTypes) { providers in
-                guard let destination = pasteDestination else { return }
-                let move = providers.contains { $0.hasItemConformingToTypeIdentifier(WorkspaceTransfer.cutType) }
-                WorkspaceTransfer.loadURLs(from: providers) { urls in
-                    document.pasteWorkspaceItems(urls, into: destination, move: move)
-                    workspaceSelection.removeAll()
+                .padding(.horizontal, 8).padding(.bottom, 4)
+
+                if document.recentFiles.isEmpty {
+                    Text("Files you open will appear here.")
+                        .font(.system(size: 10)).foregroundStyle(.tertiary)
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                } else {
+                    ForEach(document.recentFiles.prefix(3), id: \.path) { url in
+                        RecentFileRow(url: url)
+                    }
                 }
             }
+            .padding(.horizontal, 7).padding(.vertical, 9)
+            .overlay(alignment: .top) { Divider().opacity(0.45) }
 
             HStack(spacing: 8) {
                 Text("\(document.workspaceFiles.count) files")
@@ -601,7 +785,7 @@ private struct SidebarView: View {
             .padding(.horizontal, 13).frame(height: 28)
             .overlay(alignment: .top) { Divider().opacity(0.45) }
         }
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.028 : 0.018))
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.06 : 0.045))
     }
 
     private func acceptDrop(_ providers: [NSItemProvider], into directory: URL) -> Bool {
@@ -630,9 +814,86 @@ private struct SidebarView: View {
     }
 }
 
+private struct SidebarEmptyState: View {
+    @EnvironmentObject private var document: DocumentStore
+    let systemImage: String
+    let title: String
+    let detail: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .light))
+                .foregroundStyle(document.theme.accent.opacity(0.75))
+            Text(title)
+                .font(.system(size: 10.5, weight: .medium))
+            Text(detail)
+                .font(.system(size: 9.5))
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .tint(document.theme.accent)
+                    .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 14).padding(.vertical, 15)
+    }
+}
+
+private struct QuietRowSurface: ViewModifier {
+    @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let isSelected: Bool
+    @State private var isHovered = false
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(surfaceColor)
+            }
+            .onHover { hovering in
+                if reduceMotion {
+                    isHovered = hovering
+                } else {
+                    withAnimation(MoriMotion.fast) { isHovered = hovering }
+                }
+            }
+            .animation(reduceMotion ? nil : MoriMotion.fast, value: isSelected)
+    }
+
+    private var surfaceColor: Color {
+        if isSelected {
+            return document.theme.accent.opacity(document.theme.isDark ? 0.18 : 0.10)
+        }
+        if isHovered {
+            return document.theme.foreground.opacity(document.theme.isDark ? 0.07 : 0.045)
+        }
+        return .clear
+    }
+}
+
+private extension View {
+    func quietRowSurface(isSelected: Bool = false) -> some View {
+        modifier(QuietRowSurface(isSelected: isSelected))
+    }
+}
+
 private struct OutlinePane: View {
     @EnvironmentObject private var document: DocumentStore
-    let scrollSync: ScrollSyncState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ObservedObject var scrollSync: ScrollSyncState
+
+    private var currentHeadingLine: Int? {
+        document.headings.last(where: { $0.line <= scrollSync.position.line })?.line
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -642,12 +903,16 @@ private struct OutlinePane: View {
                 Spacer()
                 Text("\(document.headings.count)")
                     .font(.system(size: 9.5, weight: .medium)).foregroundStyle(.tertiary)
-                Button { document.showOutline = false } label: {
+                Button {
+                    withMoriAnimation(reduceMotion) { document.showOutline = false }
+                } label: {
                     Image(systemName: "xmark").font(.system(size: 9.5, weight: .semibold))
                 }
                 .buttonStyle(.borderless).help("Close document outline")
             }
-            .padding(.horizontal, 14).frame(height: 45)
+            .padding(.leading, document.showFileLibrary ? 14 : 76)
+            .padding(.trailing, 14)
+            .frame(height: 52)
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(document.title)
@@ -692,13 +957,25 @@ private struct OutlinePane: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
+                        .quietRowSurface(isSelected: currentHeadingLine == heading.line)
                         .help("Level \(heading.level) · line \(heading.line + 1)")
                     }
                 }
                 .padding(.horizontal, 5).padding(.vertical, 7)
             }
+
+            HStack(spacing: 7) {
+                Circle().fill(document.theme.accent).frame(width: 5, height: 5)
+                Text("Select a heading to sync source and preview")
+                    .font(.system(size: 9))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 30)
+            .overlay(alignment: .top) { Divider().opacity(0.4) }
         }
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.04 : 0.024))
     }
 }
 
@@ -724,6 +1001,7 @@ private struct RecentFileRow: View {
             .padding(.horizontal, 9).padding(.vertical, 6)
         }
         .buttonStyle(.plain)
+        .quietRowSurface(isSelected: document.displayURL?.standardizedFileURL == url.standardizedFileURL)
         .contextMenu {
             Button("Open") { document.openFile(url) }
             Button("Show in Finder") { document.revealInFinder(url) }
@@ -738,6 +1016,7 @@ private struct WorkspaceNodeRow: View {
     @EnvironmentObject private var document: DocumentStore
     let node: WorkspaceNode
     let root: URL
+    let isSelected: Bool
     let draggedURLs: [URL]
     let onDrop: ([NSItemProvider]) -> Bool
 
@@ -760,6 +1039,7 @@ private struct WorkspaceNodeRow: View {
             }
             .contentShape(Rectangle())
             .padding(.horizontal, 8).padding(.vertical, 5)
+            .quietRowSurface(isSelected: isSelected)
             .help("Expand or collapse \(node.url.lastPathComponent)")
             .onDrag { WorkspaceTransfer.dragProvider(for: draggedURLs) }
             .onDrop(of: WorkspaceTransfer.dropTypes, isTargeted: nil, perform: onDrop)
@@ -773,7 +1053,8 @@ private struct WorkspaceNodeRow: View {
                 Button("Move to Trash", role: .destructive) { document.moveWorkspaceItemToTrash(node.url) }
             }
         } else {
-            WorkspaceFileRow(url: node.url, root: root, showParent: false, draggedURLs: draggedURLs)
+            WorkspaceFileRow(url: node.url, root: root, showParent: false,
+                             isSelected: isSelected, draggedURLs: draggedURLs)
         }
     }
 }
@@ -783,6 +1064,7 @@ private struct WorkspaceFileRow: View {
     let url: URL
     let root: URL
     var showParent = true
+    var isSelected = false
     var draggedURLs: [URL]
 
     private var relativeParent: String {
@@ -819,6 +1101,7 @@ private struct WorkspaceFileRow: View {
             Spacer(minLength: 0)
         }
         .contentShape(Rectangle()).padding(.horizontal, 8).padding(.vertical, 4)
+        .quietRowSurface(isSelected: isSelected || document.displayURL?.standardizedFileURL == url.standardizedFileURL)
         .onTapGesture(count: 2) { document.openWorkspaceFile(url) }
         .onDrag { WorkspaceTransfer.dragProvider(for: draggedURLs) }
         .contextMenu {
@@ -919,52 +1202,66 @@ private struct StatusBar: View {
     @EnvironmentObject private var document: DocumentStore
 
     var body: some View {
+        ViewThatFits(in: .horizontal) {
+            statusContent(compact: false)
+            statusContent(compact: true)
+        }
+        .font(.system(size: 9.5, weight: .medium)).foregroundStyle(.secondary)
+        .padding(.horizontal, 14).frame(height: 28)
+        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
+        .overlay(alignment: .top) { Divider().opacity(0.45) }
+    }
+
+    @ViewBuilder
+    private func statusContent(compact: Bool) -> some View {
         HStack(spacing: 15) {
             Label(document.isDirty ? "Edited" : "Saved", systemImage: document.isDirty ? "circle.fill" : "checkmark.circle")
                 .labelStyle(.titleAndIcon)
             Spacer()
             if let url = document.previewFileURL {
                 Text(url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased())
-                Text(document.isImageFile(url) ? "Mori image preview" : "System preview")
+                if !compact {
+                    Text(document.isImageFile(url) ? "Mori image preview" : "System preview")
+                }
             } else {
                 Text(document.readerMode ? "Reader" : document.documentFormat.label)
-                Menu {
-                    ForEach(document.encodingChoices) { choice in
-                        Button {
-                            document.selectEncoding(choice.rawValue)
-                        } label: {
-                            if choice.name == document.encodingLabel {
-                                Label(choice.name, systemImage: "checkmark")
-                            } else {
-                                Text(choice.name)
+                if !compact {
+                    Menu {
+                        ForEach(document.encodingChoices) { choice in
+                            Button {
+                                document.selectEncoding(choice.rawValue)
+                            } label: {
+                                if choice.name == document.encodingLabel {
+                                    Label(choice.name, systemImage: "checkmark")
+                                } else {
+                                    Text(choice.name)
+                                }
                             }
                         }
+                    } label: {
+                        Text(document.encodingLabel)
                     }
-                } label: {
-                    Text(document.encodingLabel)
-                }
-                .menuStyle(.borderlessButton).fixedSize().help("Text encoding")
-                Menu {
-                    Picker("Line Endings", selection: $document.lineEnding) {
-                        ForEach(DocumentLineEnding.allCases) { ending in
-                            Text(ending.rawValue).tag(ending)
+                    .menuStyle(.borderlessButton).fixedSize().help("Text encoding")
+                    Menu {
+                        Picker("Line Endings", selection: $document.lineEnding) {
+                            ForEach(DocumentLineEnding.allCases) { ending in
+                                Text(ending.rawValue).tag(ending)
+                            }
                         }
+                    } label: {
+                        Text(document.lineEnding.rawValue)
                     }
-                } label: {
-                    Text(document.lineEnding.rawValue)
+                    .menuStyle(.borderlessButton).fixedSize().help("Line endings")
                 }
-                .menuStyle(.borderlessButton).fixedSize().help("Line endings")
                 if let selection = document.selectionStats {
                     Text("\(selection.characters) selected")
                 }
-                Text("\(document.stats.characters) characters")
+                if !compact {
+                    Text("\(document.stats.characters) characters")
+                }
                 Text("\(document.stats.words) words")
             }
         }
-        .font(.system(size: 9.5, weight: .medium)).foregroundStyle(.secondary)
-        .padding(.horizontal, 14).frame(height: 28)
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
-        .overlay(alignment: .top) { Divider().opacity(0.45) }
     }
 }
 

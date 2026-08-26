@@ -181,9 +181,9 @@ struct EditorTheme: Codable, Hashable, Identifiable, Sendable {
 
     static let paper = EditorTheme(
         id: "builtin.paper", name: "Paper", isDark: false, isBuiltIn: true,
-        backgroundHex: "#F9F7F2", foregroundHex: "#292925", mutedHex: "#817E75", lineHex: "#E7E2D8",
-        accentHex: "#197A6B", codeHex: "#EEEBE4", syntaxKeywordHex: "#B12B5B", syntaxStringHex: "#357A38",
-        syntaxCommentHex: "#8B8275", syntaxNumberHex: "#A45C12", syntaxTypeHex: "#176A86", syntaxTagHex: "#9A431A"
+        backgroundHex: "#FBFBFA", foregroundHex: "#252927", mutedHex: "#6F7572", lineHex: "#DEDFDD",
+        accentHex: "#4F857B", codeHex: "#F1F2F0", syntaxKeywordHex: "#87536A", syntaxStringHex: "#4E7354",
+        syntaxCommentHex: "#969B98", syntaxNumberHex: "#8B6445", syntaxTypeHex: "#4F6F7A", syntaxTagHex: "#765B4C"
     )
     static let sepia = EditorTheme(
         id: "builtin.sepia", name: "Sepia", isDark: false, isBuiltIn: true,
