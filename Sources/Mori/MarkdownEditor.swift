@@ -38,11 +38,11 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = settings.checkSpelling && isMarkdown
         textView.isVerticallyResizable = true
         configureWrapping(textView)
-        textView.textContainerInset = NSSize(width: 56, height: 48)
+        textView.textContainerInset = NSSize(width: 44, height: 34)
         textView.font = resolvedFont(family: isMarkdown ? typography.editorFontFamily : typography.codeFontFamily,
                                      weight: .regular,
                                      size: typography.editorFontSize,
-                                     monospacedFallback: !isMarkdown)
+                                     monospacedFallback: true)
         textView.string = text
         scrollView.documentView = textView
         let lineNumberRuler = LineNumberRulerView(scrollView: scrollView, textView: textView)
@@ -529,7 +529,7 @@ struct MarkdownEditor: NSViewRepresentable {
                 .paragraphStyle: paragraphStyle()
             ], range: target)
             if parent.isMarkdown {
-                apply(#"(?m)^(#{1,6})\s+(.+)$"#, color: NSColor(parent.theme.foreground), font: editorFont(weight: .bold, size: parent.typography.editorFontSize + 2.5), storage: storage, range: target)
+                apply(#"(?m)^(#{1,6})\s+(.+)$"#, color: NSColor(parent.theme.foreground), font: editorFont(weight: .bold, size: parent.typography.editorFontSize + 0.5), storage: storage, range: target)
                 apply(#"(?s)(?:```.*?```|~~~.*?~~~)"#, color: NSColor(parent.theme.accent), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 2.5)), storage: storage, range: target)
                 apply(#"(?s)(?:\$\$.*?\$\$|\\\[.*?\\\])"#, color: NSColor(Color(hex: parent.theme.syntaxTypeHex)), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 1.5)), storage: storage, range: target)
                 apply(#"(?m)(?<!\\)\$(?!\s)[^$\n]+?(?<!\s|\\)\$"#, color: NSColor(Color(hex: parent.theme.syntaxTypeHex)), font: codeFont(weight: .regular, size: max(11, parent.typography.editorFontSize - 1.5)), storage: storage, range: target)
@@ -646,8 +646,8 @@ struct MarkdownEditor: NSViewRepresentable {
         private func editorFont(weight: NSFont.Weight, size: Double? = nil) -> NSFont {
             resolvedFont(family: parent.typography.editorFontFamily,
                          weight: weight,
-                         size: size ?? parent.typography.editorFontSize,
-                         monospacedFallback: false)
+                         size: size ?? max(11, parent.typography.editorFontSize - 2),
+                         monospacedFallback: true)
         }
 
         private func codeFont(weight: NSFont.Weight, size: Double? = nil) -> NSFont {
