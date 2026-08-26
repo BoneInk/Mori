@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mori Minimal UI Demo</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <svg class="symbol-sprite" aria-hidden="true">
+    <symbol id="i-sidebar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+    <symbol id="i-outline" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5h7l2 2h9v9.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M3 7.5v-2A2 2 0 0 1 5 3.5h5l2 2h7a2 2 0 0 1 2 2"/></symbol>
+    <symbol id="i-file" viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l11-11-4-4L4 16z"/><path d="m13 7 4 4"/></symbol>
+    <symbol id="i-split" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></symbol>
+    <symbol id="i-reader" viewBox="0 0 24 24"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v17H7.5A3.5 3.5 0 0 0 4 22zM20 5.5A3.5 3.5 0 0 0 16.5 2H13v17h3.5A3.5 3.5 0 0 1 20 22z"/></symbol>
+    <symbol id="i-command" viewBox="0 0 24 24"><path d="M9 7V5a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v14a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z"/></symbol>
+  </svg>
+
+  <main class="demo-stage">
+    <section class="mori-window" id="mori-window" aria-label="Mori 简约界面原型">
+      <header class="titlebar titlebar-files">
+        <div class="traffic-lights" aria-label="窗口控制">
+          <span class="traffic close"></span><span class="traffic minimize"></span><span class="traffic zoom"></span>
+        </div>
+        <div class="brand" aria-label="Mori">
+          <span class="brand-mark">森</span>
+          <span>Mori</span>
+        </div>
+      </header>
+
+      <header class="titlebar titlebar-outline">
+        <span class="panel-name">大纲</span>
+      </header>
+
+      <header class="titlebar titlebar-main">
+        <div class="toolbar-left">
+          <button class="icon-button is-active" id="toggle-files" type="button" aria-label="显示或隐藏文件树" aria-pressed="true">
+            <svg><use href="#i-sidebar"/></svg>
+          </button>
+          <button class="icon-button is-active" id="toggle-outline" type="button" aria-label="显示或隐藏文档大纲" aria-pressed="true">
+            <svg><use href="#i-outline"/></svg>
+          </button>
+          <span class="toolbar-divider"></span>
+          <div class="document-identity">
+            <strong>Mori UI 设计说明</strong>
+            <span>DesignDemos / MinimalUI</span>
+          </div>
+        </div>
+
+        <div class="toolbar-actions">
+          <div class="view-switcher" role="group" aria-label="阅读视图">
+            <button type="button" data-mode="edit" aria-pressed="false"><svg><use href="#i-edit"/></svg><span>编辑</span></button>
+            <button class="is-selected" type="button" data-mode="split" aria-pressed="true"><svg><use href="#i-split"/></svg><span>分栏</span></button>
+            <button type="button" data-mode="reader" aria-pressed="false"><svg><use href="#i-reader"/></svg><span>阅读</span></button>
+          </div>
+          <button class="icon-button" type="button" aria-label="快速打开"><svg><use href="#i-search"/></svg></button>
+          <button class="icon-button" type="button" aria-label="命令面板"><svg><use href="#i-command"/></svg></button>
+          <button class="icon-button" type="button" aria-label="更多操作"><svg><use href="#i-more"/></svg></button>
+        </div>
+      </header>
+
+      <aside class="file-panel">
+        <div class="panel-toolbar">
+          <div>
+            <span class="eyebrow">工作区</span>
+            <strong>mori-notes</strong>
+          </div>
+          <div class="inline-actions">
+            <button class="icon-button" type="button" aria-label="新建文件"><svg><use href="#i-plus"/></svg></button>
+            <button class="icon-button" type="button" aria-label="工作区菜单"><svg><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+
+        <label class="search-field">
+          <svg><use href="#i-search"/></svg>
+          <input type="search" placeholder="筛选文件" aria-label="筛选文件">
+          <kbd>⌘P</kbd>
+        </label>
+
+        <nav class="file-tree" aria-label="文件树">
+          <button class="tree-row folder-row" type="button" data-folder="design">
+            <svg class="disclosure is-open"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><span>DesignDemos</span>
+          </button>
+          <div class="tree-children is-open" data-children="design">
+            <button class="tree-row folder-row" type="button" data-folder="minimal">
+              <svg class="disclosure is-open"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><span>MinimalUI</span>
+            </button>
+            <div class="tree-children is-open" data-children="minimal">
+              <button class="tree-row file-row is-selected" type="button"><span class="tree-spacer"></span><svg><use href="#i-file"/></svg><span>界面设计.md</span></button>
+              <button class="tree-row file-row" type="button"><span class="tree-spacer"></span><svg><use href="#i-file"/></svg><span>交互说明.md</span></button>
+              <button class="tree-row file-row" type="button"><span class="tree-spacer"></span><svg><use href="#i-file"/></svg><span>preview.png</span></button>
+            </div>
+          </div>
+          <button class="tree-row folder-row" type="button" data-folder="docs">
+            <svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><span>docs</span>
+          </button>
+          <button class="tree-row folder-row" type="button" data-folder="examples">
+            <svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><span>Examples</span>
+          </button>
+          <button class="tree-row folder-row" type="button" data-folder="sources">
+            <svg class="disclosure"><use href="#i-chevron"/></svg><svg><use href="#i-folder"/></svg><span>Sources</span>
+          </button>
+          <button class="tree-row file-row" type="button"><span class="tree-spacer"></span><svg><use href="#i-file"/></svg><span>README.md</span></button>
+          <button class="tree-row file-row" type="button"><span class="tree-spacer"></span><svg><use href="#i-file"/></svg><span>Package.swift</span></button>
+        </nav>
+
+        <div class="recent-files">
+          <div class="section-heading"><span>最近打开</span><button type="button">清除</button></div>
+          <button class="recent-row" type="button"><svg><use href="#i-file"/></svg><span><strong>Mermaid.md</strong><small>Examples</small></span></button>
+          <button class="recent-row" type="button"><svg><use href="#i-file"/></svg><span><strong>README.md</strong><small>Mori</small></span></button>
+        </div>
+
+        <footer class="sidebar-status"><span>27 个文件</span><span>仅 Markdown</span></footer>
+      </aside>
+
+      <aside class="outline-panel">
+        <div class="outline-document">
+          <span class="eyebrow">文档大纲</span>
+          <strong>Mori UI 设计说明</strong>
+          <small>6 个章节</small>
+        </div>
+        <nav class="outline-list" aria-label="文档章节">
+          <button class="outline-row level-1 is-selected" type="button" data-target="intro"><span></span>Mori：安静的写作空间</button>
+          <button class="outline-row level-2" type="button" data-target="principles"><span></span>设计原则</button>
+          <button class="outline-row level-3" type="button" data-target="hierarchy"><span></span>清晰的层级</button>
+          <button class="outline-row level-3" type="button" data-target="focus"><span></span>内容优先</button>
+          <button class="outline-row level-2" type="button" data-target="workflow"><span></span>保留核心工作流</button>
+          <button class="outline-row level-2" type="button" data-target="details"><span></span>交互细节</button>
+        </nav>
+        <div class="outline-note"><span class="accent-dot"></span>点击章节可同步定位源码与预览</div>
+      </aside>
+
+      <section class="main-panel">
+        <nav class="tabbar" aria-label="打开的文档">
+          <button class="tab" type="button"><svg><use href="#i-file"/></svg><span>README.md</span><svg class="tab-close"><use href="#i-close"/></svg></button>
+          <button class="tab is-selected" type="button"><svg><use href="#i-file"/></svg><span>界面设计.md</span><span class="dirty-dot"></span><svg class="tab-close"><use href="#i-close"/></svg></button>
+          <button class="new-tab" type="button" aria-label="新建标签"><svg><use href="#i-plus"/></svg></button>
+        </nav>
+
+        <div class="writing-area" id="writing-area">
+          <section class="editor-pane" aria-label="Markdown 源码编辑器">
+            <div class="pane-heading"><span>Markdown</span><small>源码</small></div>
+            <div class="source-scroll sync-scroll" id="source-scroll">
+              <div class="source-code" spellcheck="false" contenteditable="true" aria-label="可编辑 Markdown 示例">
+                <div data-section="intro"><span class="line-number">1</span><span class="syntax-heading"># Mori：安静的 Markdown 写作</span></div>
+                <div><span class="line-number">2</span><span></span></div>
+                <div><span class="line-number">3</span><span>Mori 是一款面向 macOS 的原生 Markdown 编辑器。</span></div>
+                <div><span class="line-number">4</span><span>这次改造把注意力重新交还给内容本身。</span></div>
+                <div><span class="line-number">5</span><span></span></div>
+                <div data-section="principles"><span class="line-number">6</span><span class="syntax-heading">## 设计原则</span></div>
+                <div><span class="line-number">7</span><span></span></div>
+                <div data-section="hierarchy"><span class="line-number">8</span><span class="syntax-heading">### 清晰的层级</span></div>
+                <div><span class="line-number">9</span><span>使用细分隔线和留白组织区域，减少容器感。</span></div>
+                <div><span class="line-number">10</span><span>所有选中状态只使用 <span class="syntax-code">低饱和青绿</span>。</span></div>
+                <div><span class="line-number">11</span><span></span></div>
+                <div data-section="focus"><span class="line-number">12</span><span class="syntax-heading">### 内容优先</span></div>
+                <div><span class="line-number">13</span><span><span class="syntax-list">-</span> 工具栏只保留高频入口</span></div>
+                <div><span class="line-number">14</span><span><span class="syntax-list">-</span> 文件树与大纲使用统一行高</span></div>
+                <div><span class="line-number">15</span><span><span class="syntax-list">-</span> 编辑器与预览保持同等视觉权重</span></div>
+                <div><span class="line-number">16</span><span></span></div>
+                <div data-section="workflow"><span class="line-number">17</span><span class="syntax-heading">## 保留核心工作流</span></div>
+                <div><span class="line-number">18</span><span></span></div>
+                <div><span class="line-number">19</span><span class="syntax-quote">&gt; 浏览、定位、编辑、预览仍在同一窗口完成。</span></div>
+                <div><span class="line-number">20</span><span></span></div>
+                <div><span class="line-number">21</span><span>| 区域 | 主要任务 |</span></div>
+                <div><span class="line-number">22</span><span>| --- | --- |</span></div>
+                <div><span class="line-number">23</span><span>| 文件树 | 浏览工作区与最近文件 |</span></div>
+                <div><span class="line-number">24</span><span>| 大纲 | 快速定位文档章节 |</span></div>
+                <div><span class="line-number">25</span><span>| 主区 | 编辑与实时预览 |</span></div>
+                <div><span class="line-number">26</span><span></span></div>
+                <div data-section="details"><span class="line-number">27</span><span class="syntax-heading">## 交互细节</span></div>
+                <div><span class="line-number">28</span><span>侧栏可以分别关闭，三种视图模式可以即时切换。</span></div>
+                <div><span class="line-number">29</span><span>状态栏保留保存状态、编码、行列与字数。</span></div>
+                <div><span class="line-number">30</span><span></span></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="preview-pane" aria-label="格式化预览">
+            <div class="pane-heading"><span>预览</span><small>实时同步</small></div>
+            <article class="preview-scroll sync-scroll" id="preview-scroll">
+              <section data-section="intro">
+                <p class="document-kicker">MORI DESIGN NOTE · 01</p>
+                <h1>Mori：安静的<br>Markdown 写作</h1>
+                <p class="lead">Mori 是一款面向 macOS 的原生 Markdown 编辑器。这次改造把注意力重新交还给内容本身。</p>
+              </section>
+              <section data-section="principles">
+                <h2>设计原则</h2>
+                <div data-section="hierarchy">
+                  <h3>清晰的层级</h3>
+                  <p>使用细分隔线和留白组织区域，减少容器感。所有选中状态只使用 <code>低饱和青绿</code>。</p>
+                </div>
+                <div data-section="focus">
+                  <h3>内容优先</h3>
+                  <ul><li>工具栏只保留高频入口</li><li>文件树与大纲使用统一行高</li><li>编辑器与预览保持同等视觉权重</li></ul>
+                </div>
+              </section>
+              <section data-section="workflow">
+                <h2>保留核心工作流</h2>
+                <blockquote>浏览、定位、编辑、预览仍在同一窗口完成。</blockquote>
+                <table><thead><tr><th>区域</th><th>主要任务</th></tr></thead><tbody><tr><td>文件树</td><td>浏览工作区与最近文件</td></tr><tr><td>大纲</td><td>快速定位文档章节</td></tr><tr><td>主区</td><td>编辑与实时预览</td></tr></tbody></table>
+              </section>
+              <section data-section="details">
+                <h2>交互细节</h2>
+                <p>侧栏可以分别关闭，三种视图模式可以即时切换。状态栏保留保存状态、编码、行列与字数。</p>
+              </section>
+            </article>
+          </section>
+        </div>
+
+        <footer class="statusbar">
+          <span class="save-state"><svg><use href="#i-check"/></svg>已保存</span>
+          <span class="status-spacer"></span>
+          <span>Markdown</span><span>UTF-8</span><span>LF</span><span>第 12 行，第 8 列</span><span>286 字</span>
+        </footer>
+      </section>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

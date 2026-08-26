@@ -38,7 +38,7 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = settings.checkSpelling && isMarkdown
         textView.isVerticallyResizable = true
         configureWrapping(textView)
-        textView.textContainerInset = NSSize(width: 56, height: 48)
+        textView.textContainerInset = NSSize(width: 44, height: 34)
         textView.font = resolvedFont(family: isMarkdown ? typography.editorFontFamily : typography.codeFontFamily,
                                      weight: .regular,
                                      size: typography.editorFontSize,
