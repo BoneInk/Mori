@@ -121,7 +121,7 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
 
     private func poll() {
         attempts += 1
-        webView.evaluateJavaScript("window.moriMermaidDone !== false && window.moriMathDone !== false") { [weak self] value, _ in
+        webView.evaluateJavaScript("window.moriEnhancementsDone !== false && window.moriMermaidDone !== false && window.moriMathDone !== false && (!window.moriLayoutStable || window.moriLayoutStable())") { [weak self] value, _ in
             guard let self else { return }
             if value as? Bool == true {
                 self.verifyDOM()
@@ -135,7 +135,12 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
 
     private func verifyDOM() {
         let script = """
-        ({
+        (() => {
+          const probeSource = 12.4;
+          const probeY = window.moriYForPosition(12, 0.4);
+          const roundTrip = window.moriPositionForY(probeY);
+          const anchors = window.moriSourceAnchors();
+          return {
           math: document.querySelectorAll('.katex').length,
           displays: document.querySelectorAll('.katex-display').length,
           diagrams: document.querySelectorAll('.diagram-canvas svg').length,
@@ -156,11 +161,15 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
           referenceImages: document.querySelectorAll('img[src="https://example.com/reference.png"]').length,
           codeWithBacktick: [...document.querySelectorAll('code')].filter(node => node.textContent.includes('`')).length,
           formattedDirectLinks: document.querySelectorAll('a[href="https://example.com/formatted"] strong').length,
-          sourceAnchors: window.moriSourceAnchors().length,
+          sourceAnchors: anchors.length,
           allSourceNodes: document.querySelectorAll('[data-source-line]').length,
           indexedTopLevelLists: document.querySelectorAll('article > ul[data-source-line],article > ol[data-source-line]').length,
+          syncRoundTripError: Math.abs(roundTrip.line + roundTrip.fraction - probeSource),
+          sourceAnchorsOrdered: anchors.every((anchor, index) => index === 0 || anchor.line > anchors[index - 1].line),
+          layoutObserverInstalled: Boolean(window.__moriResizeObserver),
           errors: document.querySelectorAll('.math-error,.mermaid-error').length
-        })
+          };
+        })()
         """
         webView.evaluateJavaScript(script) { [weak self] value, error in
             guard let self else { return }
@@ -189,6 +198,9 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
                   (result["sourceAnchors"] as? Int ?? 0) > 0,
                   (result["sourceAnchors"] as? Int ?? 0) < (result["allSourceNodes"] as? Int ?? 0),
                   (result["indexedTopLevelLists"] as? Int ?? 0) >= 3,
+                  (result["syncRoundTripError"] as? Double ?? 1) < 0.001,
+                  (result["sourceAnchorsOrdered"] as? Bool) == true,
+                  (result["layoutObserverInstalled"] as? Bool) == true,
                   (result["errors"] as? Int ?? 1) == 0 else {
                 self.fail("Unexpected rendered DOM: \(String(describing: value))")
                 return

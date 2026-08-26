@@ -312,6 +312,7 @@ private struct WritingWorkspace: View {
                                         typography: document.typography,
                                         baseURL: document.fileURL?.deletingLastPathComponent(),
                                         onOpenLocalFile: document.openFile,
+                                        syncMode: document.editorSettings.scrollSyncMode,
                                         scrollPosition: $scrollSync.position,
                                         scrollSource: $scrollSync.source)
                         if document.text.isEmpty && document.readerMode {

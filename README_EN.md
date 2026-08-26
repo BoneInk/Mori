@@ -42,7 +42,7 @@ Mermaid source renders directly in the preview without a network connection.
 - Offline KaTeX mathematics with accessible MathML for inline `$…$`, display `$$…$$`, and `\\[…\\]` forms
 - Footnotes, Setext headings, strikethrough, task lists, variable-length inline code spans, backtick/tilde code fences, tables, and safe HTML extensions
 - Additional CommonMark-compatible cases including escaped punctuation, multi-line blockquotes, nested mixed/task lists, reference-style links and images, spaced thematic breaks, `+` list markers, `)` ordered markers, non-1 ordered starts, closing ATX hashes, and angle-bracket link destinations
-- Source-line anchored synchronization between editor and preview
+- Bidirectional semantic-anchor synchronization between editor and preview, with Smart 35%, Top, Center, and Off modes
 - Long-document performance path with debounced background rendering, cached document analysis, and visible-range syntax highlighting for very large files
 - Reader mode for a clean, formatted-only view
 - Outline navigation in both editing and reader modes

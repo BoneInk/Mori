@@ -92,7 +92,7 @@ struct MarkdownEditor: NSViewRepresentable {
             applyTheme(textView)
             context.coordinator.highlight()
         }
-        if scrollSource == .preview || scrollSource == .outline {
+        if scrollSource == .outline || (settings.scrollSyncMode != .off && scrollSource == .preview) {
             context.coordinator.scroll(to: scrollPosition)
         }
         if let command {
@@ -180,6 +180,7 @@ struct MarkdownEditor: NSViewRepresentable {
         }
 
         func requestScrollUpdate(userInitiated: Bool) {
+            guard parent.settings.scrollSyncMode != .off else { return }
             let textLength = textView?.textStorage?.length ?? 0
             let interval = textLength > 750_000 ? 1.0 / 12.0 : (textLength > 150_000 ? 1.0 / 20.0 : 1.0 / 30.0)
             let now = ProcessInfo.processInfo.systemUptime
@@ -222,7 +223,10 @@ struct MarkdownEditor: NSViewRepresentable {
             let textLength = textView.textStorage?.length ?? 0
             if textLength > 750_000 { scheduleHighlight() }
             rebuildLineOffsetsIfNeeded()
-            let containerY = max(0, scrollView.contentView.bounds.minY - textView.textContainerOrigin.y)
+            guard let guideFraction = parent.settings.scrollSyncMode.viewportFraction else { return }
+            let guideY = scrollView.contentView.bounds.minY
+                + scrollView.contentView.bounds.height * CGFloat(guideFraction)
+            let containerY = max(0, guideY - textView.textContainerOrigin.y)
             var glyphFraction: CGFloat = 0
             let glyph = layoutManager.glyphIndex(for: NSPoint(x: 1, y: containerY),
                                                  in: textContainer,
@@ -235,7 +239,11 @@ struct MarkdownEditor: NSViewRepresentable {
             let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
             let fraction = rect.height > 1 ? Double((containerY - rect.minY) / rect.height) : 0
             let position = ScrollPosition(line: line, fraction: min(1, max(0, fraction)))
-            guard position != parent.scrollPosition || parent.scrollSource != .editor else { return }
+            if parent.scrollSource == .editor,
+               position.line == parent.scrollPosition.line,
+               abs(position.fraction - parent.scrollPosition.fraction) < 0.012 {
+                return
+            }
             parent.scrollSource = .editor
             parent.scrollPosition = position
         }
@@ -251,14 +259,18 @@ struct MarkdownEditor: NSViewRepresentable {
             let end = line + 1 < lineOffsets.count ? lineOffsets[line + 1] : (textView.textStorage?.length ?? 0)
             let glyphRange = layoutManager.glyphRange(forCharacterRange: NSRange(location: start, length: max(1, end - start)), actualCharacterRange: nil)
             let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
-            let requested = textView.textContainerOrigin.y + rect.minY + CGFloat(min(1, max(0, position.fraction))) * rect.height
+            let guideFraction = parent.settings.scrollSyncMode.viewportFraction ?? 0.35
+            let requested = textView.textContainerOrigin.y
+                + rect.minY
+                + CGFloat(min(1, max(0, position.fraction))) * rect.height
+                - scrollView.contentView.bounds.height * CGFloat(guideFraction)
             let maximum = max(0, textView.bounds.height - scrollView.contentView.bounds.height)
             let target = min(maximum, max(0, requested))
-            guard abs(scrollView.contentView.bounds.minY - target) > 1 else { return }
+            guard abs(scrollView.contentView.bounds.minY - target) > 2 else { return }
             pendingScrollUpdate?.cancel()
             pendingScrollUpdate = nil
             scrollRequestGeneration &+= 1
-            suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.12
+            suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.22
             scrollView.contentView.scroll(to: NSPoint(x: 0, y: target))
             scrollView.reflectScrolledClipView(scrollView.contentView)
         }
