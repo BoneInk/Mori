@@ -43,6 +43,11 @@ private struct EditorBehaviorSettingsView: View {
                     Toggle("Wrap long lines", isOn: $document.editorSettings.wordWrap)
                     Toggle("Typewriter mode keeps the insertion point centered", isOn: $document.editorSettings.typewriterMode)
                     Toggle("Automatically close brackets and quotes", isOn: $document.editorSettings.autoPairDelimiters)
+                    Picker("Source and preview scroll sync", selection: $document.editorSettings.scrollSyncMode) {
+                        ForEach(ScrollSyncMode.allCases) { mode in
+                            Text(mode.label).tag(mode)
+                        }
+                    }
                 }
 
                 Section("Editing") {

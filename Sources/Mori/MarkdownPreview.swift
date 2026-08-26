@@ -10,6 +10,7 @@ struct MarkdownPreview: NSViewRepresentable {
     let typography: TypographySettings
     let baseURL: URL?
     let onOpenLocalFile: (URL) -> Void
+    let syncMode: ScrollSyncMode
     @Binding var scrollPosition: ScrollPosition
     @Binding var scrollSource: ScrollSource
 
@@ -60,12 +61,12 @@ struct MarkdownPreview: NSViewRepresentable {
                                              containsMath: containsMathExpression,
                                              expectedSignature: signature,
                                              debounce: true)
-        } else if scrollSource == .editor || scrollSource == .outline {
+        } else if scrollSource == .outline || (syncMode != .off && scrollSource == .editor) {
             context.coordinator.scroll(view, to: scrollPosition)
         }
     }
 
-    private var signature: String { "\(theme.hashValue):\(typography.hashValue):\(revision):\(baseURL?.path ?? "")" }
+    private var signature: String { "\(theme.hashValue):\(typography.hashValue):\(revision):\(baseURL?.path ?? ""):sync=\(syncMode.rawValue)" }
 
     private var containsMermaidDiagram: Bool {
         markdown.range(of: #"(?m)^\s*(?:```|~~~)(?:mermaid|mmd)(?:\s.*)?$"#, options: .regularExpression) != nil
@@ -85,6 +86,7 @@ struct MarkdownPreview: NSViewRepresentable {
         weak var previewScrollView: NSScrollView?
         fileprivate var localResourceHandler: LocalPreviewResourceHandler?
         private var lastAppliedPosition = ScrollPosition(line: -1, fraction: -1)
+        private var lastAppliedGuide = -1.0
         private var scrollObserver: NSObjectProtocol?
         private var lastScrollPublish = 0.0
         private var pendingScrollUpdate: DispatchWorkItem?
@@ -150,6 +152,7 @@ struct MarkdownPreview: NSViewRepresentable {
         }
 
         func requestScrollUpdate(userInitiated: Bool) {
+            guard parent?.syncMode != .off else { return }
             let interval = documentLength > 750_000 ? 1.0 / 10.0 : (documentLength > 150_000 ? 1.0 / 15.0 : 1.0 / 30.0)
             let now = ProcessInfo.processInfo.systemUptime
             if userInitiated {
@@ -185,7 +188,8 @@ struct MarkdownPreview: NSViewRepresentable {
                   parent.scrollSource == .preview,
                   ProcessInfo.processInfo.systemUptime >= suppressScrollEventsUntil,
                   let webView else { return }
-            webView.evaluateJavaScript("window.moriCurrentPosition && window.moriCurrentPosition()") { [weak self] value, _ in
+            let guide = parent.syncMode.viewportFraction ?? 0.35
+            webView.evaluateJavaScript("window.moriCurrentPosition && window.moriCurrentPosition(\(guide))") { [weak self] value, _ in
                 guard let self,
                       generation == self.scrollRequestGeneration,
                       let parent = self.parent,
@@ -195,7 +199,11 @@ struct MarkdownPreview: NSViewRepresentable {
                       let line = result["line"] as? Int,
                       let fraction = result["fraction"] as? Double else { return }
                 let position = ScrollPosition(line: line, fraction: min(1, max(0, fraction)))
-                guard position != parent.scrollPosition || parent.scrollSource != .preview else { return }
+                if parent.scrollSource == .preview,
+                   position.line == parent.scrollPosition.line,
+                   abs(position.fraction - parent.scrollPosition.fraction) < 0.012 {
+                    return
+                }
                 parent.scrollPosition = position
             }
         }
@@ -211,7 +219,7 @@ struct MarkdownPreview: NSViewRepresentable {
         }
 
         private func waitForEnhancements(in webView: WKWebView, position: ScrollPosition, remainingAttempts: Int) {
-            webView.evaluateJavaScript("window.moriMermaidDone !== false && window.moriMathDone !== false") { [weak self, weak webView] value, _ in
+            webView.evaluateJavaScript("window.moriEnhancementsDone !== false && window.moriMermaidDone !== false && window.moriMathDone !== false && (!window.moriLayoutStable || window.moriLayoutStable())") { [weak self, weak webView] value, _ in
                 guard let self, let webView else { return }
                 if value as? Bool == true || remainingAttempts <= 0 {
                     DispatchQueue.main.async { [weak self, weak webView] in
@@ -228,13 +236,15 @@ struct MarkdownPreview: NSViewRepresentable {
         }
 
         func scroll(_ webView: WKWebView, to position: ScrollPosition, force: Bool = false) {
-            guard force || position != lastAppliedPosition else { return }
+            let guide = parent?.syncMode.viewportFraction ?? 0.35
+            guard force || position != lastAppliedPosition || guide != lastAppliedGuide else { return }
             lastAppliedPosition = position
+            lastAppliedGuide = guide
             pendingScrollUpdate?.cancel()
             pendingScrollUpdate = nil
             scrollRequestGeneration &+= 1
-            suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.12
-            webView.evaluateJavaScript("window.moriScrollToLine && window.moriScrollToLine(\(position.line), \(min(1, max(0, position.fraction))))")
+            suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.22
+            webView.evaluateJavaScript("window.moriScrollToLine && window.moriScrollToLine(\(position.line), \(min(1, max(0, position.fraction))), \(guide))")
         }
 
         private func findScrollView(in view: NSView) -> NSScrollView? {

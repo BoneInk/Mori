@@ -143,6 +143,35 @@ enum ScrollSource: Equatable {
     case outline
 }
 
+enum ScrollSyncMode: String, Codable, CaseIterable, Identifiable, Hashable, Sendable {
+    case smart
+    case top
+    case center
+    case off
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .smart: return "Smart (35%)"
+        case .top: return "Top"
+        case .center: return "Center"
+        case .off: return "Off"
+        }
+    }
+
+    /// The shared guide line inside each viewport. Keeping this away from the
+    /// exact edge leaves enough context to make semantic alignment feel stable.
+    var viewportFraction: Double? {
+        switch self {
+        case .smart: return 0.35
+        case .top: return 0.08
+        case .center: return 0.5
+        case .off: return nil
+        }
+    }
+}
+
 struct ScrollPosition: Equatable {
     var line: Int = 0
     var fraction: Double = 0
@@ -253,6 +282,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
     var checkSpelling: Bool
     var wordWrap: Bool
     var typewriterMode: Bool
+    var scrollSyncMode: ScrollSyncMode
     var autoPairDelimiters: Bool
     var tabWidth: Int
     var autosaveDelay: Double
@@ -263,13 +293,14 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
         checkSpelling: true,
         wordWrap: true,
         typewriterMode: false,
+        scrollSyncMode: .smart,
         autoPairDelimiters: true,
         tabWidth: 4,
         autosaveDelay: 1.2
     )
 
     private enum CodingKeys: String, CodingKey {
-        case showLineNumbers, highlightCurrentLine, checkSpelling, wordWrap, typewriterMode
+        case showLineNumbers, highlightCurrentLine, checkSpelling, wordWrap, typewriterMode, scrollSyncMode
         case autoPairDelimiters, tabWidth, autosaveDelay
     }
 
@@ -278,6 +309,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
          checkSpelling: Bool,
          wordWrap: Bool,
          typewriterMode: Bool,
+         scrollSyncMode: ScrollSyncMode,
          autoPairDelimiters: Bool,
          tabWidth: Int,
          autosaveDelay: Double) {
@@ -286,6 +318,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
         self.checkSpelling = checkSpelling
         self.wordWrap = wordWrap
         self.typewriterMode = typewriterMode
+        self.scrollSyncMode = scrollSyncMode
         self.autoPairDelimiters = autoPairDelimiters
         self.tabWidth = tabWidth
         self.autosaveDelay = autosaveDelay
@@ -298,6 +331,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
         checkSpelling = try values.decodeIfPresent(Bool.self, forKey: .checkSpelling) ?? true
         wordWrap = try values.decodeIfPresent(Bool.self, forKey: .wordWrap) ?? true
         typewriterMode = try values.decodeIfPresent(Bool.self, forKey: .typewriterMode) ?? false
+        scrollSyncMode = try values.decodeIfPresent(ScrollSyncMode.self, forKey: .scrollSyncMode) ?? .smart
         autoPairDelimiters = try values.decodeIfPresent(Bool.self, forKey: .autoPairDelimiters) ?? true
         tabWidth = try values.decodeIfPresent(Int.self, forKey: .tabWidth) ?? 4
         autosaveDelay = try values.decodeIfPresent(Double.self, forKey: .autosaveDelay) ?? 1.2
