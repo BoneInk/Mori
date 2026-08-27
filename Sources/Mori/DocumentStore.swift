@@ -30,7 +30,7 @@ final class DocumentStore: ObservableObject {
     @Published private(set) var textRevision = 0
     @Published var isDirty = false
     @Published var showSidebar = true
-    @Published var showFileLibrary = true
+    @Published var showFileLibrary = false
     @Published var showOutline = true
     @Published var showPreview = true
     @Published var focusMode = false
@@ -228,7 +228,7 @@ final class DocumentStore: ObservableObject {
 
     func importThemes() {
         let panel = NSOpenPanel()
-        panel.title = "Import Mori Themes"
+        panel.title = "Import Mirror Themes"
         panel.prompt = "Import"
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [.json]
@@ -481,7 +481,7 @@ final class DocumentStore: ObservableObject {
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.prompt = "Open Folder"
-        panel.message = "Choose a folder to show its files in Mori."
+        panel.message = "Choose a folder to show its files in Mirror."
         guard panel.runModal() == .OK, let url = panel.url else { return }
         openWorkspaceFolder(url)
     }
@@ -912,8 +912,8 @@ final class DocumentStore: ObservableObject {
     func toggleNavigation() {
         if !showSidebar || (!showFileLibrary && !showOutline) {
             showSidebar = true
-            showFileLibrary = true
             showOutline = true
+            showFileLibrary = false
         } else {
             showSidebar.toggle()
         }
@@ -978,7 +978,7 @@ final class DocumentStore: ObservableObject {
         let alert = NSAlert()
         alert.alertStyle = .critical
         alert.messageText = "Overwrite the version on disk?"
-        alert.informativeText = "Changes made outside Mori will be permanently replaced by the text currently open in Mori."
+        alert.informativeText = "Changes made outside Mirror will be permanently replaced by the text currently open in Mirror."
         alert.addButton(withTitle: "Overwrite")
         alert.addButton(withTitle: "Cancel")
         guard alert.runModal() == .alertFirstButtonReturn else { return }
@@ -994,7 +994,7 @@ final class DocumentStore: ObservableObject {
         let panel = NSSavePanel()
         if isMarkdownDocument { panel.allowedContentTypes = [UTType(filenameExtension: "md") ?? .plainText] }
         let fileExtension = fileURL?.pathExtension.isEmpty == false ? fileURL?.pathExtension ?? "md" : "md"
-        panel.nameFieldStringValue = "\(title) Mori Copy.\(fileExtension)"
+        panel.nameFieldStringValue = "\(title) Mirror Copy.\(fileExtension)"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         fileURL = url
         fileRevision = nil
@@ -1581,7 +1581,7 @@ final class DocumentStore: ObservableObject {
         if externalConflict?.url.standardizedFileURL != url.standardizedFileURL {
             externalConflict = ExternalFileConflict(url: url.standardizedFileURL, detectedAt: Date())
         }
-        flash("This file changed outside Mori")
+        flash("This file changed outside Mirror")
     }
 
     private func startMonitoringCurrentFile() {
@@ -2182,13 +2182,13 @@ final class DocumentStore: ObservableObject {
     }
 
     static let welcomeText = """
-    # Welcome to Mori
+    # Welcome to Mirror
 
     A quiet place for clear thinking.
 
     ## Write naturally
 
-    Mori keeps Markdown close, while the live canvas shows the shape of your document as you type. Try **bold**, _emphasis_, `inline code`, or a [link](https://example.com).
+    Mirror keeps Markdown close, while the live canvas shows the shape of your document as you type. Try **bold**, _emphasis_, `inline code`, or a [link](https://example.com).
 
     > Good writing begins with a little room to breathe.
 

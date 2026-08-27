@@ -241,7 +241,7 @@ private struct ThemeEditorView: View {
                     Text("A calm place to write")
                         .font(.system(size: 19, weight: .bold))
                     Text("Readable text with a **clear** visual hierarchy.")
-                    Text("let idea = \"Mori\"")
+                    Text("let idea = \"Mirror\"")
                         .font(.system(.body, design: .monospaced))
                         .foregroundStyle(Color(hex: theme.syntaxKeywordHex))
                         .padding(7).background(Color(hex: theme.codeHex), in: RoundedRectangle(cornerRadius: 5))
@@ -313,7 +313,7 @@ private struct TypographySettingsView: View {
 
                 Section("Live sample") {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("Mori keeps ideas clear and readable.")
+                        Text("Mirror keeps ideas clear and readable.")
                             .font(document.typography.previewFontFamily.map {
                                 .custom($0, size: document.typography.previewFontSize)
                             } ?? .system(size: document.typography.previewFontSize))
@@ -332,7 +332,7 @@ private struct TypographySettingsView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text("Imported fonts").font(.headline)
-                    Text("TTF, OTF and TTC files are copied into Mori; system fonts are not modified.")
+                    Text("TTF, OTF and TTC files are copied into Mirror; system fonts are not modified.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()

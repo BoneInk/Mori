@@ -11,7 +11,7 @@ enum MarkdownRenderer {
         let sourceLineCount = max(1, markdown.components(separatedBy: .newlines).count)
         let hasMath = body.contains("data-math=")
         let mermaidTheme = theme.isDark ? "dark" : "neutral"
-        let bodyFont = cssFontFamily(typography.previewFontFamily, fallback: "-apple-system,BlinkMacSystemFont,\"SF Pro Text\",system-ui,sans-serif")
+        let bodyFont = cssFontFamily(typography.previewFontFamily, fallback: "\"Songti SC\",\"STSong\",\"New York\",Georgia,serif")
         let codeFont = cssFontFamily(typography.codeFontFamily, fallback: "ui-monospace,SFMono-Regular,Menlo,monospace")
         let embeddedRuntime = embeddedMermaidScript.map {
             "<script>\($0.replacingOccurrences(of: "</script", with: "<\\/script", options: .caseInsensitive))</script>"

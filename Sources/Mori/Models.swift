@@ -209,10 +209,10 @@ struct EditorTheme: Codable, Hashable, Identifiable, Sendable {
     }
 
     static let paper = EditorTheme(
-        id: "builtin.paper", name: "Paper", isDark: false, isBuiltIn: true,
-        backgroundHex: "#FBFBFA", foregroundHex: "#252927", mutedHex: "#6F7572", lineHex: "#DEDFDD",
-        accentHex: "#4F857B", codeHex: "#F1F2F0", syntaxKeywordHex: "#87536A", syntaxStringHex: "#4E7354",
-        syntaxCommentHex: "#969B98", syntaxNumberHex: "#8B6445", syntaxTypeHex: "#4F6F7A", syntaxTagHex: "#765B4C"
+        id: "builtin.paper", name: "Mirror Paper", isDark: false, isBuiltIn: true,
+        backgroundHex: "#FFFEFA", foregroundHex: "#292D2C", mutedHex: "#7B817E", lineHex: "#D8D6D0",
+        accentHex: "#C96552", codeHex: "#F2EFE8", syntaxKeywordHex: "#9A4F5D", syntaxStringHex: "#4E7354",
+        syntaxCommentHex: "#969B98", syntaxNumberHex: "#9B633C", syntaxTypeHex: "#4F6F7A", syntaxTagHex: "#9A5745"
     )
     static let sepia = EditorTheme(
         id: "builtin.sepia", name: "Sepia", isDark: false, isBuiltIn: true,
@@ -271,8 +271,8 @@ struct TypographySettings: Codable, Equatable, Hashable, Sendable {
         editorFontSize: 16.5,
         previewFontSize: 17,
         editorLineSpacing: 5,
-        previewLineHeight: 1.72,
-        contentWidth: 760
+        previewLineHeight: 1.88,
+        contentWidth: 720
     )
 }
 

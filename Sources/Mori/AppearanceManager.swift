@@ -56,7 +56,7 @@ enum AppearanceManager {
         let panel = NSOpenPanel()
         panel.title = "Import Fonts"
         panel.prompt = "Import"
-        panel.message = "Imported fonts are copied into Mori and are only registered for Mori."
+        panel.message = "Imported fonts are copied into Mirror and are only registered for Mirror."
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = ["otf", "ttf", "ttc"].compactMap { UTType(filenameExtension: $0) }
         guard panel.runModal() == .OK else { return [] }

@@ -5,10 +5,10 @@
 ```mermaid
 sequenceDiagram
     participant User
-    participant Mori
+    participant Mirror
     participant Preview
-    User->>Mori: Edit Markdown
-    Mori->>Preview: Render diagram
+    User->>Mirror: Edit Markdown
+    Mirror->>Preview: Render diagram
     Preview-->>User: Show result
 ```
 

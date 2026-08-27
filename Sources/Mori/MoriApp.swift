@@ -5,7 +5,7 @@ struct MoriApp: App {
     @StateObject private var document = DocumentStore()
 
     var body: some Scene {
-        Window("Mori", id: "main") {
+        Window("Mirror", id: "main") {
             ContentView()
                 .environmentObject(document)
                 .frame(minWidth: 1120, minHeight: 620)
@@ -37,10 +37,22 @@ struct MoriApp: App {
                 Button("Toggle Navigation") { document.toggleNavigation() }
                     .keyboardShortcut("1", modifiers: [.command, .option])
                 Button("Toggle File Library") {
-                    document.showFileLibrary.toggle(); document.showSidebar = true
+                    if document.showSidebar && document.showFileLibrary && !document.showOutline {
+                        document.showFileLibrary = false
+                    } else {
+                        document.showSidebar = true
+                        document.showFileLibrary = true
+                        document.showOutline = false
+                    }
                 }
                 Button("Toggle Document Outline") {
-                    document.showOutline.toggle(); document.showSidebar = true
+                    if document.showSidebar && document.showOutline {
+                        document.showOutline = false
+                    } else {
+                        document.showSidebar = true
+                        document.showOutline = true
+                        document.showFileLibrary = false
+                    }
                 }
                 Button("Toggle Preview") { document.showPreview.toggle() }
                     .keyboardShortcut("2", modifiers: [.command, .option])

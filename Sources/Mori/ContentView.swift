@@ -5,6 +5,7 @@ private enum MoriMotion {
     static let fast = Animation.easeOut(duration: 0.14)
     static let control = Animation.easeInOut(duration: 0.2)
     static let panel = Animation.spring(response: 0.32, dampingFraction: 0.88)
+    static let navigationPanel = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.22)
 }
 
 private func withMoriAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
@@ -15,51 +16,93 @@ private func withMoriAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
     }
 }
 
+private func withMoriNavigationAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
+    if reduceMotion {
+        updates()
+    } else {
+        withAnimation(MoriMotion.navigationPanel, updates)
+    }
+}
+
 struct ContentView: View {
     @EnvironmentObject private var document: DocumentStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isDropTarget = false
     @State private var scrollSync = ScrollSyncState()
 
+    private enum NavigationDrawer {
+        case files
+        case outline
+    }
+
+    private var activeDrawer: NavigationDrawer? {
+        guard document.showSidebar, !document.focusMode else { return nil }
+        if document.showOutline, document.previewFileURL == nil, document.isMarkdownDocument {
+            return .outline
+        }
+        if document.showFileLibrary { return .files }
+        return nil
+    }
+
+    private var readingProgress: Double {
+        let lineCount = max(1, document.text.components(separatedBy: .newlines).count - 1)
+        let position = max(0, Double(scrollSync.position.line) + scrollSync.position.fraction)
+        return min(1, max(0, position / Double(lineCount)))
+    }
+
     var body: some View {
         ZStack {
             document.theme.background.ignoresSafeArea()
 
-            HSplitView {
-                if document.showSidebar && document.showFileLibrary && !document.focusMode {
-                    SidebarView()
-                        .frame(minWidth: 180, idealWidth: 220, maxWidth: 420)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
-                if document.showSidebar && document.showOutline && document.previewFileURL == nil && document.isMarkdownDocument && !document.focusMode {
-                    OutlinePane(scrollSync: scrollSync)
-                        .frame(minWidth: 180, idealWidth: 215, maxWidth: 440)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
-                }
-
-                VStack(spacing: 0) {
-                    TopBar()
+            VStack(spacing: 0) {
+                TopBar()
+                if !document.focusMode {
                     DocumentTabBar()
-                    if let conflict = document.externalConflict {
-                        ExternalConflictBanner(conflict: conflict)
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    Divider().opacity(0.45)
-
-                    if let previewURL = document.previewFileURL {
-                        ExternalFilePreview(url: previewURL)
-                            .id(document.activeTabID)
-                            .transition(.opacity)
-                    } else {
-                        WritingWorkspace(scrollSync: scrollSync)
-                            .id(document.activeTabID)
-                            .transition(.opacity)
-                    }
-
-                    StatusBar()
                 }
-                .frame(minWidth: 560)
-                .layoutPriority(1)
+                if let conflict = document.externalConflict {
+                    ExternalConflictBanner(conflict: conflict)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                HStack(spacing: 0) {
+                    if !document.focusMode {
+                        MirrorNavigationRail()
+                            .transition(.opacity)
+                    }
+
+                    HSplitView {
+                        if activeDrawer == .files {
+                            SidebarView()
+                                .frame(minWidth: 210, idealWidth: 252, maxWidth: 420)
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                        } else if activeDrawer == .outline {
+                            OutlinePane(scrollSync: scrollSync, readingProgress: readingProgress)
+                                .frame(minWidth: 205, idealWidth: 252, maxWidth: 420)
+                                .transition(.move(edge: .leading).combined(with: .opacity))
+                        }
+
+                        VStack(spacing: 0) {
+                            ZStack(alignment: .topLeading) {
+                                if let previewURL = document.previewFileURL {
+                                    ExternalFilePreview(url: previewURL)
+                                        .id(document.activeTabID)
+                                        .transition(.opacity)
+                                } else {
+                                    WritingWorkspace(scrollSync: scrollSync)
+                                        .id(document.activeTabID)
+                                        .transition(.opacity)
+                                }
+
+                                if document.previewFileURL == nil, document.isMarkdownDocument {
+                                    ReadingProgressBar(progress: readingProgress)
+                                }
+                            }
+                            if !document.focusMode { StatusBar() }
+                        }
+                        .frame(minWidth: 560)
+                        .layoutPriority(1)
+                    }
+                }
             }
 
             if isDropTarget {
@@ -85,9 +128,9 @@ struct ContentView: View {
                 .animation(reduceMotion ? nil : .spring(response: 0.35), value: notice)
             }
         }
-        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showFileLibrary)
-        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showOutline)
-        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showSidebar)
+        .animation(reduceMotion ? nil : MoriMotion.navigationPanel, value: document.showFileLibrary)
+        .animation(reduceMotion ? nil : MoriMotion.navigationPanel, value: document.showOutline)
+        .animation(reduceMotion ? nil : MoriMotion.navigationPanel, value: document.showSidebar)
         .animation(reduceMotion ? nil : MoriMotion.control, value: document.focusMode)
         .animation(reduceMotion ? nil : MoriMotion.fast, value: isDropTarget)
         .animation(reduceMotion ? nil : MoriMotion.control, value: document.externalConflict)
@@ -135,6 +178,124 @@ struct ContentView: View {
     }
 }
 
+private struct MirrorNavigationRail: View {
+    @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private var outlineAvailable: Bool {
+        document.previewFileURL == nil && document.isMarkdownDocument
+    }
+
+    private var filesActive: Bool {
+        document.showSidebar && document.showFileLibrary && (!document.showOutline || !outlineAvailable)
+    }
+
+    private var outlineActive: Bool {
+        document.showSidebar && document.showOutline && outlineAvailable
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            railButton("Files", systemImage: "folder", isActive: filesActive) {
+                withMoriNavigationAnimation(reduceMotion) {
+                    if filesActive {
+                        document.showFileLibrary = false
+                    } else {
+                        document.showSidebar = true
+                        document.showFileLibrary = true
+                        document.showOutline = false
+                    }
+                }
+            }
+
+            railButton("Outline", systemImage: "list.bullet", isActive: outlineActive) {
+                withMoriNavigationAnimation(reduceMotion) {
+                    if outlineActive {
+                        document.showOutline = false
+                    } else {
+                        document.showSidebar = true
+                        document.showOutline = true
+                        document.showFileLibrary = false
+                    }
+                }
+            }
+            .disabled(!outlineAvailable)
+
+            railButton("Search", systemImage: "magnifyingglass", isActive: false) {
+                if document.workspaceURL == nil {
+                    document.showQuickOpen = true
+                } else {
+                    document.showWorkspaceSearch = true
+                }
+            }
+
+            Spacer()
+
+            SettingsLink {
+                railLabel("Settings", systemImage: "gearshape")
+            }
+            .buttonStyle(.plain)
+            .help("Typography and appearance")
+            .accessibilityLabel("Typography and appearance")
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 8)
+        .frame(width: 58)
+        .background(railBackground)
+        .overlay(alignment: .trailing) { Divider().opacity(0.55) }
+    }
+
+    private func railButton(_ title: String,
+                            systemImage: String,
+                            isActive: Bool,
+                            action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            railLabel(title, systemImage: systemImage)
+                .foregroundStyle(isActive ? document.theme.accent : Color.secondary)
+                .background(isActive ? document.theme.accent.opacity(document.theme.isDark ? 0.18 : 0.11) : .clear,
+                            in: RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .help(title)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private func railLabel(_ title: String, systemImage: String) -> some View {
+        VStack(spacing: 2) {
+            Image(systemName: systemImage)
+                .font(.system(size: 13, weight: .regular))
+            Text(title)
+                .font(.system(size: 8, weight: .medium))
+        }
+        .frame(width: 43, height: 43)
+        .contentShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private var railBackground: Color {
+        document.theme.isDark
+            ? document.theme.foreground.opacity(0.045)
+            : Color(hex: "#EBEAE5")
+    }
+}
+
+private struct ReadingProgressBar: View {
+    @EnvironmentObject private var document: DocumentStore
+    let progress: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            Rectangle()
+                .fill(document.theme.accent)
+                .frame(width: max(0, proxy.size.width * progress), height: 2)
+        }
+        .frame(height: 2)
+        .background(document.theme.foreground.opacity(0.045))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 private struct ExternalConflictBanner: View {
     @EnvironmentObject private var document: DocumentStore
     let conflict: ExternalFileConflict
@@ -143,13 +304,13 @@ private struct ExternalConflictBanner: View {
         HStack(spacing: 10) {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             VStack(alignment: .leading, spacing: 1) {
-                Text("File changed outside Mori").font(.system(size: 11.5, weight: .semibold))
+                Text("File changed outside Mirror").font(.system(size: 11.5, weight: .semibold))
                 Text(conflict.url.lastPathComponent + " has a newer version on disk. Choose which version to keep.")
                     .font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             Button("Reload Disk Version") { document.reloadExternalVersion() }
-            Button("Save Mori Copy…") { document.saveConflictAs() }
+            Button("Save Mirror Copy…") { document.saveConflictAs() }
             Button("Overwrite Disk…") { document.overwriteExternalVersion() }
                 .foregroundStyle(.red)
         }
@@ -189,8 +350,10 @@ private struct DocumentTabBar: View {
             }
             .buttonStyle(.plain).help("New tab").padding(.horizontal, 11)
         }
+        .padding(.leading, 58)
         .frame(height: 34)
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.026 : 0.016))
+        .background(document.theme.isDark ? document.theme.foreground.opacity(0.026) : Color(hex: "#F2F1ED"))
+        .overlay(alignment: .bottom) { Divider().opacity(0.45) }
     }
 }
 
@@ -302,28 +465,13 @@ private struct WritingWorkspace: View {
             }
 
             if document.isMarkdownDocument && (document.readerMode || (document.showPreview && !document.focusMode)) {
-                VStack(spacing: 0) {
-                    WorkspacePaneHeader(title: "PREVIEW", detail: document.readerMode ? "Reader" : "Live sync")
-                    ZStack {
-                        MarkdownPreview(markdown: document.text,
-                                        revision: document.textRevision,
-                                        title: document.title,
-                                        theme: document.theme,
-                                        typography: document.typography,
-                                        baseURL: document.fileURL?.deletingLastPathComponent(),
-                                        onOpenLocalFile: document.openFile,
-                                        syncMode: document.editorSettings.scrollSyncMode,
-                                        scrollPosition: $scrollSync.position,
-                                        scrollSource: $scrollSync.source)
-                        if document.text.isEmpty && document.readerMode {
-                            ContentUnavailableView(
-                                "Nothing to read yet",
-                                systemImage: "doc.text",
-                                description: Text("Switch to Edit and start writing.")
-                            )
-                            .foregroundStyle(.secondary)
-                            .allowsHitTesting(false)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                Group {
+                    if document.readerMode {
+                        ImmersiveReaderSurface(scrollSync: scrollSync)
+                    } else {
+                        VStack(spacing: 0) {
+                            WorkspacePaneHeader(title: "PREVIEW", detail: "Live sync")
+                            RenderedMarkdownContent(scrollSync: scrollSync)
                         }
                     }
                 }
@@ -335,6 +483,185 @@ private struct WritingWorkspace: View {
         .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showPreview)
         .animation(reduceMotion ? nil : MoriMotion.control, value: document.focusMode)
         .animation(reduceMotion ? nil : MoriMotion.fast, value: document.text.isEmpty)
+    }
+}
+
+private struct RenderedMarkdownContent: View {
+    @EnvironmentObject private var document: DocumentStore
+    @ObservedObject var scrollSync: ScrollSyncState
+
+    var body: some View {
+        MarkdownPreview(markdown: document.text,
+                        revision: document.textRevision,
+                        title: document.title,
+                        theme: document.theme,
+                        typography: document.typography,
+                        baseURL: document.fileURL?.deletingLastPathComponent(),
+                        onOpenLocalFile: document.openFile,
+                        syncMode: document.editorSettings.scrollSyncMode,
+                        scrollPosition: $scrollSync.position,
+                        scrollSource: $scrollSync.source)
+    }
+}
+
+private struct ImmersiveReaderSurface: View {
+    @EnvironmentObject private var document: DocumentStore
+    @ObservedObject var scrollSync: ScrollSyncState
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            readerCanvas
+
+            GeometryReader { proxy in
+                let horizontalInset: CGFloat = proxy.size.width < 760 ? 42 : 92
+                let desiredWidth = CGFloat(document.typography.contentWidth) + 154
+                let paperWidth = min(desiredWidth, max(480, proxy.size.width - horizontalInset * 2))
+                let paperHeight = max(360, proxy.size.height - 70)
+
+                RenderedMarkdownContent(scrollSync: scrollSync)
+                    .frame(width: paperWidth, height: paperHeight)
+                    .background(document.theme.background)
+                    .overlay {
+                        Rectangle()
+                            .stroke(Color(hex: document.theme.lineHex).opacity(0.9), lineWidth: 1)
+                    }
+                    .shadow(color: document.theme.isDark ? .clear : .black.opacity(0.07), radius: 18, y: 8)
+                    .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
+            }
+
+            if document.text.isEmpty {
+                ContentUnavailableView(
+                    "Nothing to read yet",
+                    systemImage: "doc.text",
+                    description: Text("Switch to Edit and start writing.")
+                )
+                .foregroundStyle(.secondary)
+                .allowsHitTesting(false)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            ReaderToolDock()
+                .padding(.trailing, 18)
+        }
+        .background(readerCanvas)
+    }
+
+    private var readerCanvas: Color {
+        document.theme.isDark ? Color(hex: "#1D211F") : Color(hex: "#E9E6DF")
+    }
+}
+
+private struct ReaderToolDock: View {
+    @EnvironmentObject private var document: DocumentStore
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Menu {
+                Button("Smaller Text") {
+                    document.typography.previewFontSize = max(12, document.typography.previewFontSize - 1)
+                }
+                Button("Larger Text") {
+                    document.typography.previewFontSize = min(30, document.typography.previewFontSize + 1)
+                }
+                Divider()
+                Button("Tighter Lines") {
+                    document.typography.previewLineHeight = max(1.35, document.typography.previewLineHeight - 0.08)
+                }
+                Button("Looser Lines") {
+                    document.typography.previewLineHeight = min(2.2, document.typography.previewLineHeight + 0.08)
+                }
+            } label: {
+                toolLabel("textformat.size", help: "Typography")
+            }
+            .dockMenuStyle()
+
+            Menu {
+                widthButton("Narrow", width: 620)
+                widthButton("Standard", width: 760)
+                widthButton("Wide", width: 900)
+            } label: {
+                toolLabel("arrow.left.and.right", help: "Reading width")
+            }
+            .dockMenuStyle()
+
+            Menu {
+                ForEach(document.availableThemes) { theme in
+                    Button {
+                        document.selectTheme(theme)
+                    } label: {
+                        if document.theme.id == theme.id {
+                            Label(theme.name, systemImage: "checkmark")
+                        } else {
+                            Text(theme.name)
+                        }
+                    }
+                }
+            } label: {
+                toolLabel("circle.lefthalf.filled", help: "Reading theme")
+            }
+            .dockMenuStyle()
+
+            Button {
+                withMoriAnimation(reduceMotion) { document.focusMode.toggle() }
+            } label: {
+                toolLabel(document.focusMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                          help: document.focusMode ? "Exit focus mode" : "Focus mode",
+                          isActive: document.focusMode)
+            }
+            .buttonStyle(.plain)
+
+            Rectangle()
+                .fill(Color(hex: document.theme.lineHex))
+                .frame(width: 20, height: 1)
+                .padding(.vertical, 1)
+
+            Menu {
+                Button("Export HTML…", systemImage: "globe") { document.exportHTML() }
+                Button("Export PDF…", systemImage: "doc.richtext") { document.exportPDF() }
+                Divider()
+                Button("Print…", systemImage: "printer") { document.printDocument() }
+            } label: {
+                toolLabel("square.and.arrow.up", help: "Export")
+            }
+            .dockMenuStyle()
+            .disabled(document.isExportingDocument)
+        }
+    }
+
+    private func widthButton(_ title: String, width: Double) -> some View {
+        Button {
+            document.typography.contentWidth = width
+        } label: {
+            if document.typography.contentWidth == width {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+
+    private func toolLabel(_ systemImage: String, help: String, isActive: Bool = false) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(isActive ? Color.white : Color.secondary)
+            .frame(width: 36, height: 36)
+            .background(isActive ? document.theme.accent : document.theme.background, in: Circle())
+            .overlay {
+                Circle().stroke(Color(hex: document.theme.lineHex), lineWidth: isActive ? 0 : 1)
+            }
+            .shadow(color: document.theme.isDark ? .clear : .black.opacity(0.07), radius: 5, y: 2)
+            .contentShape(Circle())
+            .help(help)
+            .accessibilityLabel(help)
+    }
+}
+
+private extension View {
+    func dockMenuStyle() -> some View {
+        menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
     }
 }
 
@@ -363,97 +690,79 @@ private struct WorkspacePaneHeader: View {
 
 private struct TopBar: View {
     @EnvironmentObject private var document: DocumentStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
-    private var hasLeadingNavigationPane: Bool {
-        guard document.showSidebar, !document.focusMode else { return false }
-        if document.showFileLibrary { return true }
-        return document.showOutline && document.previewFileURL == nil && document.isMarkdownDocument
-    }
 
     var body: some View {
-        HStack(spacing: 8) {
-            Button {
-                withMoriAnimation(reduceMotion) {
-                    if !document.showSidebar {
-                        document.showSidebar = true
-                        document.showFileLibrary = true
-                    } else {
-                        document.showFileLibrary.toggle()
-                    }
-                }
-            } label: {
-                Image(systemName: "sidebar.left")
-                    .foregroundStyle(document.showSidebar && document.showFileLibrary ? document.theme.accent : .secondary)
-                    .scaleEffect(document.showSidebar && document.showFileLibrary ? 1 : 0.93)
-            }
-            .help(document.showFileLibrary ? "Hide file library" : "Show file library")
-            .accessibilityLabel("File library")
-            .accessibilityAddTraits(document.showSidebar && document.showFileLibrary ? .isSelected : [])
-
-            Button {
-                withMoriAnimation(reduceMotion) {
-                    if !document.showSidebar {
-                        document.showSidebar = true
-                        document.showOutline = true
-                    } else {
-                        document.showOutline.toggle()
-                    }
-                }
-            } label: {
-                Image(systemName: "list.bullet")
-                    .foregroundStyle(document.showSidebar && document.showOutline ? document.theme.accent : .secondary)
-                    .scaleEffect(document.showSidebar && document.showOutline ? 1 : 0.93)
-            }
-            .disabled(document.previewFileURL != nil || !document.isMarkdownDocument)
-            .help(document.showOutline ? "Hide document outline" : "Show document outline")
-            .accessibilityLabel("Document outline")
-            .accessibilityAddTraits(document.showSidebar && document.showOutline ? .isSelected : [])
-
-            Divider()
-                .frame(height: 20)
-                .padding(.horizontal, 2)
-
+        ZStack {
             VStack(alignment: .leading, spacing: 1) {
                 HStack(spacing: 5) {
-                    Text(document.title).font(.system(size: 13, weight: .semibold))
+                    Text(document.title)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .lineLimit(1)
                     if document.isDirty { Circle().fill(document.theme.accent).frame(width: 5, height: 5) }
                 }
-                Text(document.displayURL?.deletingLastPathComponent().path(percentEncoded: false) ?? "Not yet saved")
-                    .font(.system(size: 9.5)).foregroundStyle(.secondary).lineLimit(1)
+                Text(document.displayURL?.deletingLastPathComponent().lastPathComponent ?? "Not yet saved")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.tertiary)
+                    .lineLimit(1)
             }
-            .frame(minWidth: 110, maxWidth: 360, alignment: .leading)
-            .layoutPriority(1)
+            .frame(maxWidth: 360)
 
-            Spacer()
+            HStack(spacing: 8) {
+                MirrorBrand()
+                Spacer()
 
-            ViewThatFits(in: .horizontal) {
-                WorkspaceModeControl()
-                WorkspaceModeControl(compact: true)
+                ViewThatFits(in: .horizontal) {
+                    WorkspaceModeControl()
+                    WorkspaceModeControl(compact: true)
+                }
+
+                Button { document.showQuickOpen = true } label: {
+                    Image(systemName: "magnifyingglass")
+                }
+                .help("Quick open (⌘P)")
+                .accessibilityLabel("Quick open")
+
+                Button { document.showCommandPalette = true } label: {
+                    Image(systemName: "command")
+                }
+                .help("Command palette (⇧⌘P)")
+                .accessibilityLabel("Command palette")
+
+                ExportMenu()
+                MoreActionsMenu()
             }
-
-            Button { document.showQuickOpen = true } label: {
-                Image(systemName: "magnifyingglass")
-            }
-            .help("Quick open (⌘P)")
-            .accessibilityLabel("Quick open")
-
-            Button { document.showCommandPalette = true } label: {
-                Image(systemName: "command")
-            }
-            .help("Command palette (⇧⌘P)")
-            .accessibilityLabel("Command palette")
-
-            ExportMenu()
-            MoreActionsMenu()
         }
         .buttonStyle(.borderless)
-        .padding(.leading, hasLeadingNavigationPane ? 12 : 76)
+        .padding(.leading, 76)
         .padding(.trailing, 12)
-        .frame(height: 52)
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
-        .animation(reduceMotion ? nil : MoriMotion.control, value: document.showFileLibrary)
-        .animation(reduceMotion ? nil : MoriMotion.control, value: document.showOutline)
+        .frame(height: 54)
+        .background(topBarBackground)
+        .overlay(alignment: .bottom) { Divider().opacity(0.5) }
+    }
+
+    private var topBarBackground: Color {
+        document.theme.isDark ? document.theme.background : Color(hex: "#F6F5F1")
+    }
+}
+
+private struct MirrorBrand: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("觅")
+                .font(.custom("STXingkaiSC-Light", size: 19))
+                .foregroundStyle(Color(hex: "#C56B32"))
+                .frame(width: 29, height: 29)
+                .background(Color(hex: "#EEE4CF"), in: RoundedRectangle(cornerRadius: 8))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color(hex: "#DFD1B6"), lineWidth: 1)
+                }
+            Text("Mirror")
+                .font(.system(size: 15, weight: .semibold))
+                .fixedSize()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Mirror")
     }
 }
 
@@ -603,7 +912,6 @@ private struct MarkdownFormattingMenu: View {
 
 private struct SidebarView: View {
     @EnvironmentObject private var document: DocumentStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var workspaceSelection = Set<String>()
     @State private var workspaceQuery = ""
 
@@ -638,26 +946,6 @@ private struct SidebarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 9) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6).fill(document.theme.accent)
-                    Image(systemName: "leaf.fill").foregroundStyle(.white).font(.system(size: 10.5))
-                }.frame(width: 24, height: 24)
-                Text("Mori")
-                    .font(.system(size: 15, weight: .semibold))
-                    .lineLimit(1)
-                    .fixedSize()
-                Spacer()
-                Button {
-                    withMoriAnimation(reduceMotion) { document.showFileLibrary = false }
-                } label: {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
-                }
-                .buttonStyle(.borderless).help("Close file library")
-            }
-            .padding(.leading, 76).padding(.trailing, 14).frame(height: 52)
-            .overlay(alignment: .bottom) { Divider().opacity(0.45) }
-
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("WORKSPACE")
@@ -704,6 +992,7 @@ private struct SidebarView: View {
             .font(.system(size: 11))
             .padding(.horizontal, 14)
             .frame(height: 66)
+            .overlay(alignment: .bottom) { Divider().opacity(0.4) }
 
             if let root = document.workspaceURL {
                 HStack(spacing: 7) {
@@ -811,7 +1100,7 @@ private struct SidebarView: View {
             .padding(.horizontal, 13).frame(height: 28)
             .overlay(alignment: .top) { Divider().opacity(0.45) }
         }
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.06 : 0.045))
+        .background(document.theme.isDark ? document.theme.foreground.opacity(0.045) : Color(hex: "#F2F1ED"))
     }
 
     private func acceptDrop(_ providers: [NSItemProvider], into directory: URL) -> Bool {
@@ -914,8 +1203,8 @@ private extension View {
 
 private struct OutlinePane: View {
     @EnvironmentObject private var document: DocumentStore
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @ObservedObject var scrollSync: ScrollSyncState
+    let readingProgress: Double
 
     private var currentHeadingLine: Int? {
         document.headings.last(where: { $0.line <= scrollSync.position.line })?.line
@@ -923,30 +1212,24 @@ private struct OutlinePane: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 7) {
-                Text("OUTLINE")
-                    .font(.system(size: 9.5, weight: .semibold)).tracking(1).foregroundStyle(.secondary)
-                Spacer()
-                Text("\(document.headings.count)")
-                    .font(.system(size: 9.5, weight: .medium)).foregroundStyle(.tertiary)
-                Button {
-                    withMoriAnimation(reduceMotion) { document.showOutline = false }
-                } label: {
-                    Image(systemName: "xmark").font(.system(size: 9.5, weight: .semibold))
-                }
-                .buttonStyle(.borderless).help("Close document outline")
-            }
-            .padding(.leading, document.showFileLibrary ? 14 : 76)
-            .padding(.trailing, 14)
-            .frame(height: 52)
-
             VStack(alignment: .leading, spacing: 3) {
-                Text(document.title)
-                    .font(.system(size: 12.5, weight: .semibold)).lineLimit(2)
-                Text("Article structure")
-                    .font(.system(size: 9.5)).foregroundStyle(.tertiary)
+                Text("THIS DOCUMENT")
+                    .font(.system(size: 9, weight: .semibold))
+                    .tracking(1.1)
+                    .foregroundStyle(.tertiary)
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(document.title)
+                        .font(.system(size: 12, weight: .semibold))
+                        .lineLimit(2)
+                    Spacer(minLength: 4)
+                    Text("\(document.headings.count) sections")
+                        .font(.system(size: 9.5, weight: .medium))
+                        .foregroundStyle(.tertiary)
+                        .fixedSize()
+                }
             }
-            .padding(.horizontal, 14).padding(.bottom, 12)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 66, alignment: .leading)
 
             Divider().opacity(0.4)
 
@@ -992,16 +1275,19 @@ private struct OutlinePane: View {
 
             HStack(spacing: 7) {
                 Circle().fill(document.theme.accent).frame(width: 5, height: 5)
-                Text("Select a heading to sync source and preview")
-                    .font(.system(size: 9))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
+                Text("Reading progress")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int((readingProgress * 100).rounded()))%")
+                    .font(.system(size: 9.5, weight: .semibold))
+                    .foregroundStyle(document.theme.accent)
             }
-            .padding(.horizontal, 14)
-            .frame(height: 30)
+            .padding(.horizontal, 15)
+            .frame(height: 40)
             .overlay(alignment: .top) { Divider().opacity(0.4) }
         }
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.04 : 0.024))
+        .background(document.theme.isDark ? document.theme.foreground.opacity(0.035) : Color(hex: "#F2F1ED"))
     }
 }
 
@@ -1131,7 +1417,7 @@ private struct WorkspaceFileRow: View {
         .onTapGesture(count: 2) { document.openWorkspaceFile(url) }
         .onDrag { WorkspaceTransfer.dragProvider(for: draggedURLs) }
         .contextMenu {
-            Button(document.isSupportedDocument(url) ? "Open in Mori" : "Preview in Mori") {
+            Button(document.isSupportedDocument(url) ? "Open in Mirror" : "Preview in Mirror") {
                 document.openWorkspaceFile(url)
             }
             if !document.isSupportedDocument(url) {
@@ -1234,7 +1520,7 @@ private struct StatusBar: View {
         }
         .font(.system(size: 9.5, weight: .medium)).foregroundStyle(.secondary)
         .padding(.horizontal, 14).frame(height: 28)
-        .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
+        .background(document.theme.isDark ? document.theme.foreground.opacity(0.018) : Color(hex: "#F6F5F1"))
         .overlay(alignment: .top) { Divider().opacity(0.45) }
     }
 
@@ -1247,7 +1533,7 @@ private struct StatusBar: View {
             if let url = document.previewFileURL {
                 Text(url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased())
                 if !compact {
-                    Text(document.isImageFile(url) ? "Mori image preview" : "System preview")
+                    Text(document.isImageFile(url) ? "Mirror image preview" : "System preview")
                 }
             } else {
                 Text(document.readerMode ? "Reader" : document.documentFormat.label)

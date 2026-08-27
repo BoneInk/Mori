@@ -97,7 +97,7 @@ private struct NativeImagePreview: View {
                     ContentUnavailableView(
                         "Image unavailable",
                         systemImage: "photo.badge.exclamationmark",
-                        description: Text(loader.errorMessage ?? "Mori couldn’t decode this image.")
+                        description: Text(loader.errorMessage ?? "Mirror couldn’t decode this image.")
                     )
                 }
             }

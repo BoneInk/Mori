@@ -38,7 +38,7 @@ struct DocumentHistoryView: View {
                 ContentUnavailableView(
                     "No Saved Versions Yet",
                     systemImage: "clock",
-                    description: Text("Mori keeps periodic versions after this document is saved or autosaved.")
+                    description: Text("Mirror keeps periodic versions after this document is saved or autosaved.")
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -126,4 +126,3 @@ struct DocumentHistoryView: View {
         return formatter.localizedString(for: date, relativeTo: Date())
     }
 }
-

@@ -1,36 +1,40 @@
-# Mori
+# Mirror
 
 [简体中文](README.md) | English
 
-Mori is a native macOS Markdown editor built for a calm, focused writing experience.
+Mirror is a native macOS Markdown editor built around a quiet, focused writing experience. Its refreshed interface combines a warm-gray workspace, a paper-like reading canvas, and one muted orange accent so files, writing, and reading remain clear without becoming visually busy.
 
 ## Screenshots
 
 ### Writing and live preview
 
-Workspace files and the document outline stay alongside the syntax-highlighted source editor and synchronized live preview.
+A 58-point navigation rail keeps Files, Outline, Search, and Settings close at hand. Files and the document outline share one resizable drawer, while the syntax-highlighted source editor and live preview retain bidirectional semantic-anchor synchronization.
 
-![Mori writing workspace with file tree, document outline, Markdown source, and live preview](docs/images/editor-preview.png)
+![Mirror workspace with navigation rail, file tree, Markdown source, and live preview](docs/images/editor-preview.png)
 
 ### Reader mode
 
-Reader mode gives the rendered document more space while keeping workspace and heading navigation available.
+Reader mode presents the rendered document on a centered paper canvas, with floating controls for typography, reading width, theme, focus, and export. Heading navigation and reading progress continue to track the document position.
 
-![Mori reader mode with workspace files and document outline](docs/images/reader-mode.png)
+![Mirror immersive reader mode with document outline and floating reading tools](docs/images/reader-mode.png)
 
 ### Offline Mermaid diagrams
 
 Mermaid source renders directly in the preview without a network connection.
 
-![Mori editing and previewing an offline Mermaid sequence diagram](docs/images/mermaid-preview.png)
+![Mirror editing and previewing an offline Mermaid sequence diagram](docs/images/mermaid-preview.png)
 
 ## Features
 
 - Native Markdown editor with lightweight syntax highlighting
+- Calm native macOS interface with warm neutrals, paper-like content hierarchy, and one muted orange accent
+- Persistent navigation rail with a mutually exclusive, resizable shared drawer for Files and Outline
+- Immersive reader canvas with live reading progress and floating typography, line-height, width, theme, focus, and export controls
+- Natural panel and mode transitions that respect the macOS Reduce Motion setting
 - Live rendered preview with eight built-in light and dark themes
 - Custom theme editor with palette duplication, JSON import/export, and persistent selection
 - Independent writing, preview, and code font choices with adjustable size, line spacing, line height, and reading width
-- Private TTF, OTF, and TTC font import; imported fonts stay inside Mori and do not modify system fonts
+- Private TTF, OTF, and TTC font import; imported fonts stay inside Mirror and do not modify system fonts
 - Configurable line numbers, current-line highlight, spelling, line wrapping, typewriter mode, tab width, and autosave delay
 - Optional bracket/quote auto-pairing plus selection-aware Tab and Shift-Tab indentation using the configured tab width
 - GitHub-style Markdown tables with alignment and responsive overflow
@@ -46,7 +50,7 @@ Mermaid source renders directly in the preview without a network connection.
 - Long-document performance path with debounced background rendering, cached document analysis, and visible-range syntax highlighting for very large files
 - Reader mode for a clean, formatted-only view
 - Outline navigation in both editing and reader modes
-- Local links clicked in rendered Markdown open as editable or preview tabs inside Mori
+- Local links clicked in rendered Markdown open as editable or preview tabs inside Mirror
 - Document outline and heading navigation
 - Persistent recent-files directory with Finder actions
 - Virtualized, recursive folder tree with expandable subdirectories and support for all file types
@@ -88,8 +92,8 @@ Use a `mermaid` fenced code block to render diagrams in the live preview:
 ````markdown
 ```mermaid
 sequenceDiagram
-    User->>Mori: Edit Markdown
-    Mori-->>User: Update preview
+    User->>Mirror: Edit Markdown
+    Mirror-->>User: Update preview
 ```
 ````
 
@@ -101,11 +105,11 @@ Mathematics rendering uses the MIT-licensed KaTeX runtime and bundled WOFF2 math
 
 ## Themes and fonts
 
-Open **Mori → Settings** (or press **⌘,**) to choose an included skin, create a custom palette, or configure typography. A custom skin can be exported as a `.mori-theme.json` file and imported on another Mac.
+Open **Mirror → Settings** (or press **⌘,**) to choose an included skin, create a custom palette, or configure typography. A custom skin can be exported as a `.mori-theme.json` file and imported on another Mac.
 
-Imported font files are stored in `~/Library/Application Support/Mori/Fonts` and registered only while Mori is running. Removing an imported font from Settings moves Mori's private copy to Trash.
+Imported font files are stored in `~/Library/Application Support/Mori/Fonts` and registered only while Mirror is running. Removing an imported font from Settings moves Mirror's private copy to Trash.
 
-Saved document versions are stored privately in `~/Library/Application Support/Mori/History`. Mori keeps at most 30 versions and 64 MB per document, throttles autosave snapshots, and carries history forward when workspace files or folders are renamed.
+Saved document versions are stored privately in `~/Library/Application Support/Mori/History`. Mirror keeps at most 30 versions and 64 MB per document, throttles autosave snapshots, and carries history forward when workspace files or folders are renamed.
 
 ## Build
 
@@ -125,7 +129,7 @@ swift run Mori
 
 The release build creates a Universal 2 (`arm64` + `x86_64`) `dist/Mori.app` and applies an ad-hoc local signature. No full Xcode installation is required.
 
-Create a DMG that installs by dragging Mori into Applications:
+Create a DMG that installs the app by dragging it into Applications:
 
 ```bash
 chmod +x scripts/build-dmg.sh
