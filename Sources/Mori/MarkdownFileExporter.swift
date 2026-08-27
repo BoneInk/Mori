@@ -6,6 +6,11 @@ final class MarkdownFileExporter: NSObject, WKNavigationDelegate {
     enum Operation {
         case pdf(URL)
         case printDocument
+
+        var isPrint: Bool {
+            if case .printDocument = self { return true }
+            return false
+        }
     }
 
     private let operation: Operation
@@ -38,7 +43,7 @@ final class MarkdownFileExporter: NSObject, WKNavigationDelegate {
     }
 
     private func waitForEnhancements(remainingAttempts: Int) {
-        webView.evaluateJavaScript("window.moriMermaidDone !== false && window.moriMathDone !== false") { [weak self] value, _ in
+        webView.evaluateJavaScript("window.moriEnhancementsDone !== false && window.moriMermaidDone !== false && window.moriMathDone !== false && (!window.moriLayoutStable || window.moriLayoutStable())") { [weak self] value, _ in
             guard let self else { return }
             if value as? Bool == true || remainingAttempts <= 0 {
                 self.performOperation()

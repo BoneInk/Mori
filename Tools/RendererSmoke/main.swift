@@ -70,6 +70,23 @@ let html = MarkdownRenderer.document(markdown: markdown,
                                      embeddedMermaidScript: MermaidRuntime.script,
                                      embeddedMathScript: MathRuntime.script)
 
+let portableRoot = FileManager.default.temporaryDirectory
+    .appendingPathComponent("MoriPortableHTML-\(UUID().uuidString)", isDirectory: true)
+try FileManager.default.createDirectory(at: portableRoot, withIntermediateDirectories: true)
+let portableImage = portableRoot.appendingPathComponent("sample.png")
+let portableImageData = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
+try portableImageData.write(to: portableImage)
+let portableFixture = #"<img src="sample.png"><img src="https://example.com/remote.png">"#
+let portableDocument = MarkdownExportResources.makePortable(portableFixture, baseURL: portableRoot)
+
+guard portableDocument.embeddedResourceCount == 1,
+      portableDocument.skippedResourceCount == 0,
+      portableDocument.html.contains("data:image/png;base64,\(portableImageData.base64EncodedString())"),
+      portableDocument.html.contains("https://example.com/remote.png") else {
+    fputs("Portable HTML export did not embed local media correctly.\n", stderr)
+    exit(2)
+}
+
 guard html.contains("data-math="),
       html.contains("class=\"footnotes\""),
       html.contains("<h1 data-source-line="),

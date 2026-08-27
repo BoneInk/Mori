@@ -12,8 +12,10 @@ swiftc \
   Sources/Mori/MermaidRuntime.swift \
   Sources/Mori/MathRuntime.swift \
   Sources/Mori/MarkdownRenderer.swift \
+  Sources/Mori/MarkdownExportResources.swift \
   Tools/RendererSmoke/main.swift \
   -framework AppKit \
+  -framework UniformTypeIdentifiers \
   -framework WebKit \
   -o "$OUTPUT"
 

@@ -67,7 +67,7 @@ Mermaid source renders directly in the preview without a network connection.
 - External-file change monitoring with conflict-safe autosave, reload, overwrite, and Save As recovery choices
 - Single-window document tabs for Markdown, source, text, images, and binary previews, including restored tab sessions and duplicate-open prevention
 - Focus mode and reading statistics
-- HTML and print-ready PDF export with theme, typography, local media, tables, code highlighting, and Mermaid diagrams preserved
+- Toolbar export for portable HTML and print-ready PDF with theme, typography, embedded local media, tables, code highlighting, mathematics, and Mermaid diagrams preserved
 - Native macOS print workflow with A4-aware pagination styles
 - Keyboard shortcuts and native macOS menus
 - VoiceOver labels for primary navigation, editing, preview, formatting, history, and save controls
@@ -76,6 +76,10 @@ Mermaid source renders directly in the preview without a network connection.
 - Searchable keyboard command palette (`⇧⌘P`) spanning files, navigation, formatting, export, views, themes, and settings
 - Per-document local history with preview and one-click restore; each document is capped at 30 versions and 64 MB
 - Smart Return handling for Markdown lists, task items, ordered lists, quotes, and source-code indentation
+
+## Export
+
+Use the export button in the top-right corner of the main window to create portable HTML, PDF, or enter the macOS print flow. HTML embeds normal local images and media from the document folder into a single file. Resources larger than 32 MB, or resources beyond the 96 MB total embedding budget, remain linked and are reported after export.
 
 ## Diagrams
 
@@ -120,3 +124,12 @@ swift run Mori
 ```
 
 The release build creates a Universal 2 (`arm64` + `x86_64`) `dist/Mori.app` and applies an ad-hoc local signature. No full Xcode installation is required.
+
+Create a DMG that installs by dragging Mori into Applications:
+
+```bash
+chmod +x scripts/build-dmg.sh
+./scripts/build-dmg.sh
+```
+
+The installer is written to `dist/Mori-1.0.dmg`. The current build uses an ad-hoc signature; public distribution additionally requires Apple Developer ID signing and Apple notarization.

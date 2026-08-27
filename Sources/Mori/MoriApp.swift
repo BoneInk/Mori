@@ -26,12 +26,12 @@ struct MoriApp: App {
                 Divider()
                 Button("Export HTML…") { document.exportHTML() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
-                    .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
+                    .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.isExportingDocument)
                 Button("Export PDF…") { document.exportPDF() }
                     .keyboardShortcut("p", modifiers: [.command, .option])
-                    .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
+                    .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.isExportingDocument)
                 Button("Print…") { document.printDocument() }
-                    .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
+                    .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.isExportingDocument)
             }
             CommandMenu("View") {
                 Button("Toggle Navigation") { document.toggleNavigation() }

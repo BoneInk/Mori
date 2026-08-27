@@ -70,6 +70,7 @@ final class DocumentStore: ObservableObject {
     @Published private(set) var workspaceSearchError: String?
     @Published private(set) var documentHistory: [DocumentHistoryEntry] = []
     @Published private(set) var isLoadingDocumentHistory = false
+    @Published private(set) var isExportingDocument = false
     @Published private(set) var previewFileURL: URL?
     @Published private(set) var openTabs: [OpenDocumentTab] = []
     @Published private(set) var activeTabID: UUID?
@@ -1003,28 +1004,31 @@ final class DocumentStore: ObservableObject {
     }
 
     func exportHTML() {
+        guard isMarkdownDocument, previewFileURL == nil, !isExportingDocument else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.html]
         panel.nameFieldStringValue = "\(title).html"
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        do {
-            let html = MarkdownRenderer.document(
-                markdown: text,
-                title: title,
-                theme: theme,
-                typography: typography,
-                embeddedMermaidScript: MermaidRuntime.script,
-                embeddedMathScript: MathRuntime.script
-            )
-            try html.write(to: url, atomically: true, encoding: .utf8)
-            flash("Exported \(url.lastPathComponent)")
-        } catch {
-            showError("Couldn’t export HTML", error)
+        isExportingDocument = true
+        flash("Preparing HTML export…")
+        Task { [weak self] in
+            guard let self else { return }
+            let document = await self.makePortableExportDocument()
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { try document.html.write(to: url, atomically: true, encoding: .utf8) }
+            }.value
+            self.isExportingDocument = false
+            switch result {
+            case .success:
+                self.flash(self.exportSuccessMessage(for: url, document: document))
+            case .failure(let error):
+                self.showError("Couldn’t export HTML", error)
+            }
         }
     }
 
     func exportPDF() {
-        guard isMarkdownDocument, previewFileURL == nil else { return }
+        guard isMarkdownDocument, previewFileURL == nil, !isExportingDocument else { return }
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.pdf]
         panel.nameFieldStringValue = "\(title).pdf"
@@ -1033,31 +1037,60 @@ final class DocumentStore: ObservableObject {
     }
 
     func printDocument() {
-        guard isMarkdownDocument, previewFileURL == nil else { return }
+        guard isMarkdownDocument, previewFileURL == nil, !isExportingDocument else { return }
         startRenderedExport(.printDocument)
     }
 
     private func startRenderedExport(_ operation: MarkdownFileExporter.Operation) {
-        let html = MarkdownRenderer.document(markdown: text,
-                                             title: title,
-                                             theme: theme,
-                                             typography: typography,
-                                             embeddedMermaidScript: MermaidRuntime.script,
-                                             embeddedMathScript: MathRuntime.script)
-        markdownExporter = MarkdownFileExporter(html: html,
-                                                baseURL: fileURL?.deletingLastPathComponent(),
-                                                operation: operation) { [weak self] result in
+        guard !isExportingDocument else { return }
+        let exportBaseURL = fileURL?.deletingLastPathComponent()
+        isExportingDocument = true
+        flash(operation.isPrint ? "Preparing print…" : "Preparing PDF export…")
+        Task { [weak self] in
             guard let self else { return }
-            self.markdownExporter = nil
-            switch result {
-            case .success(let url):
-                self.flash(url.map { "Exported \($0.lastPathComponent)" } ?? "Sent to printer")
-            case .failure(let error as CocoaError) where error.code == .userCancelled:
-                break
-            case .failure(let error):
-                self.showError("Couldn’t finish the rendered export", error)
+            let document = await self.makePortableExportDocument()
+            self.markdownExporter = MarkdownFileExporter(html: document.html,
+                                                         baseURL: exportBaseURL,
+                                                         operation: operation) { [weak self] result in
+                guard let self else { return }
+                self.markdownExporter = nil
+                self.isExportingDocument = false
+                switch result {
+                case .success(let url):
+                    if let url {
+                        self.flash(self.exportSuccessMessage(for: url, document: document))
+                    } else {
+                        self.flash("Sent to printer")
+                    }
+                case .failure(let error as CocoaError) where error.code == .userCancelled:
+                    break
+                case .failure(let error):
+                    self.showError("Couldn’t finish the rendered export", error)
+                }
             }
         }
+    }
+
+    private func makePortableExportDocument() async -> PortableHTMLDocument {
+        let markdown = text
+        let documentTitle = title
+        let selectedTheme = theme
+        let selectedTypography = typography
+        let baseURL = fileURL?.deletingLastPathComponent()
+        return await Task.detached(priority: .userInitiated) {
+            let html = MarkdownRenderer.document(markdown: markdown,
+                                                 title: documentTitle,
+                                                 theme: selectedTheme,
+                                                 typography: selectedTypography,
+                                                 embeddedMermaidScript: MermaidRuntime.script,
+                                                 embeddedMathScript: MathRuntime.script)
+            return MarkdownExportResources.makePortable(html, baseURL: baseURL)
+        }.value
+    }
+
+    private func exportSuccessMessage(for url: URL, document: PortableHTMLDocument) -> String {
+        guard document.skippedResourceCount > 0 else { return "Exported \(url.lastPathComponent)" }
+        return "Exported \(url.lastPathComponent); \(document.skippedResourceCount) large or unavailable media file(s) remain linked"
     }
 
     func insert(prefix: String) {

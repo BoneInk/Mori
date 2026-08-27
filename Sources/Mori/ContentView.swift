@@ -444,6 +444,7 @@ private struct TopBar: View {
             .help("Command palette (⇧⌘P)")
             .accessibilityLabel("Command palette")
 
+            ExportMenu()
             MoreActionsMenu()
         }
         .buttonStyle(.borderless)
@@ -453,6 +454,30 @@ private struct TopBar: View {
         .background(document.theme.foreground.opacity(document.theme.isDark ? 0.018 : 0.008))
         .animation(reduceMotion ? nil : MoriMotion.control, value: document.showFileLibrary)
         .animation(reduceMotion ? nil : MoriMotion.control, value: document.showOutline)
+    }
+}
+
+private struct ExportMenu: View {
+    @EnvironmentObject private var document: DocumentStore
+
+    var body: some View {
+        Menu {
+            Button("Export HTML…", systemImage: "globe") { document.exportHTML() }
+            Button("Export PDF…", systemImage: "doc.richtext") { document.exportPDF() }
+            Divider()
+            Button("Print…", systemImage: "printer") { document.printDocument() }
+        } label: {
+            if document.isExportingDocument {
+                ProgressView().controlSize(.small)
+            } else {
+                Image(systemName: "square.and.arrow.up")
+            }
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .disabled(document.previewFileURL != nil || !document.isMarkdownDocument || document.isExportingDocument)
+        .help(document.isExportingDocument ? "Export in progress" : "Export document")
+        .accessibilityLabel(document.isExportingDocument ? "Export in progress" : "Export document")
     }
 }
 

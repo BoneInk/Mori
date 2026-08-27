@@ -14,6 +14,7 @@ swiftc \
   Sources/Mori/MermaidRuntime.swift \
   Sources/Mori/MathRuntime.swift \
   Sources/Mori/MarkdownRenderer.swift \
+  Sources/Mori/MarkdownExportResources.swift \
   Sources/Mori/MarkdownFileExporter.swift \
   Sources/Mori/DocumentStore.swift \
   Tools/DocumentStoreSmoke/main.swift \

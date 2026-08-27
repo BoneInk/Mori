@@ -86,9 +86,9 @@ struct CommandPaletteView: View {
 
     private var exportCommands: [PaletteCommand] {
         [
-            command("export.html", "Export HTML…", "Export", "globe", "⇧⌘E", "web rendered", enabled: document.isMarkdownDocument && document.previewFileURL == nil) { document.exportHTML() },
-            command("export.pdf", "Export PDF…", "Export", "doc.fill", "⌥⌘P", "print rendered", enabled: document.isMarkdownDocument && document.previewFileURL == nil) { document.exportPDF() },
-            command("export.print", "Print…", "Export", "printer", nil, "paper", enabled: document.isMarkdownDocument && document.previewFileURL == nil) { document.printDocument() }
+            command("export.html", "Export HTML…", "Export", "globe", "⇧⌘E", "web rendered", enabled: document.isMarkdownDocument && document.previewFileURL == nil && !document.isExportingDocument) { document.exportHTML() },
+            command("export.pdf", "Export PDF…", "Export", "doc.fill", "⌥⌘P", "print rendered", enabled: document.isMarkdownDocument && document.previewFileURL == nil && !document.isExportingDocument) { document.exportPDF() },
+            command("export.print", "Print…", "Export", "printer", nil, "paper", enabled: document.isMarkdownDocument && document.previewFileURL == nil && !document.isExportingDocument) { document.printDocument() }
         ]
     }
 
@@ -222,4 +222,3 @@ struct CommandPaletteView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08, execute: item.action)
     }
 }
-
