@@ -28,7 +28,7 @@ struct ContentView: View {
     @EnvironmentObject private var document: DocumentStore
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var isDropTarget = false
-    @State private var scrollSync = ScrollSyncState()
+    @StateObject private var scrollSync = ScrollSyncState()
 
     private enum NavigationDrawer {
         case files
@@ -469,10 +469,7 @@ private struct WritingWorkspace: View {
                     if document.readerMode {
                         ImmersiveReaderSurface(scrollSync: scrollSync)
                     } else {
-                        VStack(spacing: 0) {
-                            WorkspacePaneHeader(title: "PREVIEW", detail: "Live sync")
-                            RenderedMarkdownContent(scrollSync: scrollSync)
-                        }
+                        PaperPreviewSurface(scrollSync: scrollSync, presentation: .split)
                     }
                 }
                 .frame(minWidth: 320)
@@ -505,18 +502,34 @@ private struct RenderedMarkdownContent: View {
 }
 
 private struct ImmersiveReaderSurface: View {
+    @ObservedObject var scrollSync: ScrollSyncState
+
+    var body: some View {
+        PaperPreviewSurface(scrollSync: scrollSync, presentation: .reader)
+    }
+}
+
+private struct PaperPreviewSurface: View {
+    enum Presentation: Equatable {
+        case split
+        case reader
+
+        var showsTools: Bool { self == .reader }
+    }
+
     @EnvironmentObject private var document: DocumentStore
     @ObservedObject var scrollSync: ScrollSyncState
+    let presentation: Presentation
 
     var body: some View {
         ZStack(alignment: .trailing) {
             readerCanvas
 
             GeometryReader { proxy in
-                let horizontalInset: CGFloat = proxy.size.width < 760 ? 42 : 92
-                let desiredWidth = CGFloat(document.typography.contentWidth) + 154
-                let paperWidth = min(desiredWidth, max(480, proxy.size.width - horizontalInset * 2))
-                let paperHeight = max(360, proxy.size.height - 70)
+                let horizontalInset = paperHorizontalInset(for: proxy.size.width)
+                let desiredWidth = CGFloat(document.typography.contentWidth) + (presentation == .reader ? 154 : 112)
+                let paperWidth = min(desiredWidth, max(280, proxy.size.width - horizontalInset * 2))
+                let paperHeight = max(320, proxy.size.height - (presentation == .reader ? 70 : 56))
 
                 RenderedMarkdownContent(scrollSync: scrollSync)
                     .frame(width: paperWidth, height: paperHeight)
@@ -525,7 +538,9 @@ private struct ImmersiveReaderSurface: View {
                         Rectangle()
                             .stroke(Color(hex: document.theme.lineHex).opacity(0.9), lineWidth: 1)
                     }
-                    .shadow(color: document.theme.isDark ? .clear : .black.opacity(0.07), radius: 18, y: 8)
+                    .shadow(color: document.theme.isDark ? .clear : .black.opacity(0.07),
+                            radius: presentation == .reader ? 18 : 12,
+                            y: presentation == .reader ? 8 : 5)
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             }
 
@@ -540,10 +555,21 @@ private struct ImmersiveReaderSurface: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
 
-            ReaderToolDock()
-                .padding(.trailing, 18)
+            if presentation.showsTools {
+                ReaderToolDock()
+                    .padding(.trailing, 18)
+            }
         }
         .background(readerCanvas)
+    }
+
+    private func paperHorizontalInset(for width: CGFloat) -> CGFloat {
+        switch presentation {
+        case .split:
+            return width < 620 ? 22 : 42
+        case .reader:
+            return width < 760 ? 42 : 92
+        }
     }
 
     private var readerCanvas: Color {

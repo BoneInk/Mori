@@ -28,6 +28,7 @@ Mermaid source renders directly in the preview without a network connection.
 
 - Native Markdown editor with lightweight syntax highlighting
 - Calm native macOS interface with warm neutrals, paper-like content hierarchy, and one muted orange accent
+- Split editing uses the same centered paper preview hierarchy as the immersive reader
 - Persistent navigation rail with a mutually exclusive, resizable shared drawer for Files and Outline
 - Immersive reader canvas with live reading progress and floating typography, line-height, width, theme, focus, and export controls
 - Natural panel and mode transitions that respect the macOS Reduce Motion setting
