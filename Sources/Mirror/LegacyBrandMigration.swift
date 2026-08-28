@@ -25,6 +25,11 @@ enum LegacyBrandMigration {
             let migratedKey = key
                 .replacingOccurrences(of: legacyBrand, with: currentBrand)
                 .replacingOccurrences(of: legacyBrand.lowercased(), with: currentBrand.lowercased())
+            // Mirror intentionally defaults to Simplified Chinese. Do not let
+            // a stale language override from the previous bundle silently put
+            // a newly renamed installation back into English.
+            guard migratedKey != "\(currentBrand)AppLanguage",
+                  migratedKey != "AppleLanguages" else { continue }
             guard defaults.object(forKey: migratedKey) == nil else { continue }
             defaults.set(value, forKey: migratedKey)
         }
