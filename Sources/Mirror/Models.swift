@@ -172,9 +172,16 @@ enum ScrollSyncMode: String, Codable, CaseIterable, Identifiable, Hashable, Send
     }
 }
 
+enum ScrollBoundary: String, Equatable {
+    case none
+    case top
+    case bottom
+}
+
 struct ScrollPosition: Equatable {
     var line: Int = 0
     var fraction: Double = 0
+    var boundary: ScrollBoundary = .none
 }
 
 final class ScrollSyncState: ObservableObject {
@@ -283,6 +290,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
     var wordWrap: Bool
     var typewriterMode: Bool
     var scrollSyncMode: ScrollSyncMode
+    var preserveSingleLineBreaks: Bool
     var autoPairDelimiters: Bool
     var tabWidth: Int
     var autosaveDelay: Double
@@ -294,6 +302,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
         wordWrap: true,
         typewriterMode: false,
         scrollSyncMode: .smart,
+        preserveSingleLineBreaks: true,
         autoPairDelimiters: true,
         tabWidth: 4,
         autosaveDelay: 1.2
@@ -301,7 +310,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case showLineNumbers, highlightCurrentLine, checkSpelling, wordWrap, typewriterMode, scrollSyncMode
-        case autoPairDelimiters, tabWidth, autosaveDelay
+        case preserveSingleLineBreaks, autoPairDelimiters, tabWidth, autosaveDelay
     }
 
     init(showLineNumbers: Bool,
@@ -310,6 +319,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
          wordWrap: Bool,
          typewriterMode: Bool,
          scrollSyncMode: ScrollSyncMode,
+         preserveSingleLineBreaks: Bool,
          autoPairDelimiters: Bool,
          tabWidth: Int,
          autosaveDelay: Double) {
@@ -319,6 +329,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
         self.wordWrap = wordWrap
         self.typewriterMode = typewriterMode
         self.scrollSyncMode = scrollSyncMode
+        self.preserveSingleLineBreaks = preserveSingleLineBreaks
         self.autoPairDelimiters = autoPairDelimiters
         self.tabWidth = tabWidth
         self.autosaveDelay = autosaveDelay
@@ -332,6 +343,7 @@ struct EditorBehaviorSettings: Codable, Equatable, Hashable, Sendable {
         wordWrap = try values.decodeIfPresent(Bool.self, forKey: .wordWrap) ?? true
         typewriterMode = try values.decodeIfPresent(Bool.self, forKey: .typewriterMode) ?? false
         scrollSyncMode = try values.decodeIfPresent(ScrollSyncMode.self, forKey: .scrollSyncMode) ?? .smart
+        preserveSingleLineBreaks = try values.decodeIfPresent(Bool.self, forKey: .preserveSingleLineBreaks) ?? true
         autoPairDelimiters = try values.decodeIfPresent(Bool.self, forKey: .autoPairDelimiters) ?? true
         tabWidth = try values.decodeIfPresent(Int.self, forKey: .tabWidth) ?? 4
         autosaveDelay = try values.decodeIfPresent(Double.self, forKey: .autosaveDelay) ?? 1.2

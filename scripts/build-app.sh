@@ -3,7 +3,7 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD_MODE="${1:-release}"
-APP_DIR="$PROJECT_DIR/dist/Mori.app"
+APP_DIR="$PROJECT_DIR/dist/Mirror.app"
 CONTENTS_DIR="$APP_DIR/Contents"
 
 cd "$PROJECT_DIR"
@@ -16,21 +16,25 @@ if [[ "$BUILD_MODE" == "release" ]]; then
     swift build -c release \
       --triple "$ARCHITECTURE-apple-macosx14.0" \
       --scratch-path "$SCRATCH_DIR"
-    ARCH_BINARIES+=("$SCRATCH_DIR/$ARCHITECTURE-apple-macosx/release/Mori")
+    ARCH_BINARIES+=("$SCRATCH_DIR/$ARCHITECTURE-apple-macosx/release/Mirror")
   done
   mkdir -p "$PROJECT_DIR/.build-universal/release"
-  xcrun lipo -create "${ARCH_BINARIES[@]}" -output "$PROJECT_DIR/.build-universal/release/Mori"
-  BUILT_EXECUTABLE="$PROJECT_DIR/.build-universal/release/Mori"
+  xcrun lipo -create "${ARCH_BINARIES[@]}" -output "$PROJECT_DIR/.build-universal/release/Mirror"
+  BUILT_EXECUTABLE="$PROJECT_DIR/.build-universal/release/Mirror"
 else
   swift build -c "$BUILD_MODE"
-  BUILT_EXECUTABLE="$PROJECT_DIR/.build/$BUILD_MODE/Mori"
+  BUILT_EXECUTABLE="$PROJECT_DIR/.build/$BUILD_MODE/Mirror"
 fi
 
 rm -rf "$APP_DIR"
 mkdir -p "$CONTENTS_DIR/MacOS" "$CONTENTS_DIR/Resources"
-cp "$BUILT_EXECUTABLE" "$CONTENTS_DIR/MacOS/Mori"
+cp "$BUILT_EXECUTABLE" "$CONTENTS_DIR/MacOS/Mirror"
 cp "$PROJECT_DIR/Resources/Info.plist" "$CONTENTS_DIR/Info.plist"
 cp "$PROJECT_DIR/Resources/AppIcon.icns" "$CONTENTS_DIR/Resources/AppIcon.icns" 2>/dev/null || true
+for LOCALIZATION in "$PROJECT_DIR"/Resources/*.lproj; do
+  [[ -d "$LOCALIZATION" ]] || continue
+  cp -R "$LOCALIZATION" "$CONTENTS_DIR/Resources/"
+done
 cp -R "$PROJECT_DIR/Resources/Mermaid" "$CONTENTS_DIR/Resources/Mermaid"
 cp -R "$PROJECT_DIR/Resources/KaTeX" "$CONTENTS_DIR/Resources/KaTeX"
 

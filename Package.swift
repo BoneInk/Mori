@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "Mori",
+    name: "Mirror",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "Mori", targets: ["Mori"])
+        .executable(name: "Mirror", targets: ["Mirror"])
     ],
     targets: [
         .executableTarget(
-            name: "Mori",
-            path: "Sources/Mori",
+            name: "Mirror",
+            path: "Sources/Mirror",
             swiftSettings: [
                 .swiftLanguageMode(.v5)
             ],

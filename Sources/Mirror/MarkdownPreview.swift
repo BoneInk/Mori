@@ -8,6 +8,7 @@ struct MarkdownPreview: NSViewRepresentable {
     let title: String
     let theme: EditorTheme
     let typography: TypographySettings
+    let preserveSingleLineBreaks: Bool
     let baseURL: URL?
     let onOpenLocalFile: (URL) -> Void
     let syncMode: ScrollSyncMode
@@ -26,7 +27,8 @@ struct MarkdownPreview: NSViewRepresentable {
         view.setValue(false, forKey: "drawsBackground")
         view.navigationDelegate = context.coordinator
         context.coordinator.parent = self
-        context.coordinator.signature = signature
+        context.coordinator.configurationSignature = configurationSignature
+        context.coordinator.revision = revision
         context.coordinator.documentLength = (markdown as NSString).length
         context.coordinator.webView = view
         context.coordinator.localResourceHandler = localResourceHandler
@@ -34,52 +36,54 @@ struct MarkdownPreview: NSViewRepresentable {
             coordinator?.requestScrollUpdate(userInitiated: true)
         }
         context.coordinator.startObservingScroll()
-        context.coordinator.scheduleLoad(markdown: markdown,
-                                         title: title,
-                                         theme: theme,
-                                         typography: typography,
-                                         baseURL: baseURL,
-                                         containsMermaid: containsMermaidDiagram,
-                                         containsMath: containsMathExpression,
-                                         expectedSignature: signature,
-                                         debounce: false)
+        context.coordinator.scheduleFullLoad(markdown: markdown,
+                                             title: title,
+                                             theme: theme,
+                                             typography: typography,
+                                             baseURL: baseURL,
+                                             expectedConfiguration: configurationSignature,
+                                             expectedRevision: revision,
+                                             debounce: false)
         return view
     }
 
     func updateNSView(_ view: WKWebView, context: Context) {
         context.coordinator.parent = self
-        if signature != context.coordinator.signature {
-            context.coordinator.signature = signature
+        if configurationSignature != context.coordinator.configurationSignature {
+            context.coordinator.configurationSignature = configurationSignature
+            context.coordinator.revision = revision
             context.coordinator.documentLength = (markdown as NSString).length
             context.coordinator.pendingPosition = scrollPosition
-            context.coordinator.scheduleLoad(markdown: markdown,
-                                             title: title,
-                                             theme: theme,
-                                             typography: typography,
-                                             baseURL: baseURL,
-                                             containsMermaid: containsMermaidDiagram,
-                                             containsMath: containsMathExpression,
-                                             expectedSignature: signature,
-                                             debounce: true)
+            context.coordinator.scheduleFullLoad(markdown: markdown,
+                                                 title: title,
+                                                 theme: theme,
+                                                 typography: typography,
+                                                 baseURL: baseURL,
+                                                 expectedConfiguration: configurationSignature,
+                                                 expectedRevision: revision,
+                                                 debounce: true)
+        } else if revision != context.coordinator.revision {
+            context.coordinator.revision = revision
+            context.coordinator.documentLength = (markdown as NSString).length
+            context.coordinator.pendingPosition = scrollPosition
+            context.coordinator.scheduleContentUpdate(markdown: markdown,
+                                                      title: title,
+                                                      baseURL: baseURL,
+                                                      expectedConfiguration: configurationSignature,
+                                                      expectedRevision: revision)
         } else if scrollSource == .outline || (syncMode != .off && scrollSource == .editor) {
             context.coordinator.scroll(view, to: scrollPosition)
         }
     }
 
-    private var signature: String { "\(theme.hashValue):\(typography.hashValue):\(revision):\(baseURL?.path ?? ""):sync=\(syncMode.rawValue)" }
-
-    private var containsMermaidDiagram: Bool {
-        markdown.range(of: #"(?m)^\s*(?:```|~~~)(?:mermaid|mmd)(?:\s.*)?$"#, options: .regularExpression) != nil
-    }
-
-    private var containsMathExpression: Bool {
-        markdown.range(of: #"(?m)^\s*(?:\$\$|\\\[)\s*$|(?<!\\)\$(?!\s)[^$\n]+?(?<!\s|\\)\$"#,
-                       options: .regularExpression) != nil
+    private var configurationSignature: String {
+        "\(theme.hashValue):\(typography.hashValue):breaks=\(preserveSingleLineBreaks):\(baseURL?.path ?? "")"
     }
 
     @MainActor
     final class Coordinator: NSObject, WKNavigationDelegate {
-        var signature = ""
+        var configurationSignature = ""
+        var revision = -1
         var pendingPosition: ScrollPosition?
         var parent: MarkdownPreview?
         weak var webView: WKWebView?
@@ -94,47 +98,119 @@ struct MarkdownPreview: NSViewRepresentable {
         private var suppressScrollEventsUntil = 0.0
         fileprivate var documentLength = 0
         private var renderTask: Task<Void, Never>?
+        private var renderGeneration = 0
+        private var navigationRevision = -1
 
         deinit {
             renderTask?.cancel()
             if let scrollObserver { NotificationCenter.default.removeObserver(scrollObserver) }
         }
 
-        func scheduleLoad(markdown: String,
-                          title: String,
-                          theme: EditorTheme,
-                          typography: TypographySettings,
-                          baseURL: URL?,
-                          containsMermaid: Bool,
-                          containsMath: Bool,
-                          expectedSignature: String,
-                          debounce: Bool) {
+        func scheduleFullLoad(markdown: String,
+                              title: String,
+                              theme: EditorTheme,
+                              typography: TypographySettings,
+                              baseURL: URL?,
+                              expectedConfiguration: String,
+                              expectedRevision: Int,
+                              debounce: Bool) {
             renderTask?.cancel()
+            renderGeneration &+= 1
+            let generation = renderGeneration
+            let preserveSingleLineBreaks = parent?.preserveSingleLineBreaks ?? false
             renderTask = Task { [weak self, weak webView] in
                 if debounce { try? await Task.sleep(for: .milliseconds(85)) }
                 guard !Task.isCancelled else { return }
                 let html = await Task.detached(priority: .userInitiated) {
-                    let rendered = MarkdownRenderer.document(markdown: markdown, title: title, theme: theme, typography: typography)
+                    let rendered = MarkdownRenderer.document(markdown: markdown,
+                                                             title: title,
+                                                             theme: theme,
+                                                             typography: typography,
+                                                             preserveSingleLineBreaks: preserveSingleLineBreaks)
                     return LocalPreviewResources.rewriteLocalMedia(in: rendered, baseURL: baseURL)
                 }.value
                 guard !Task.isCancelled,
                       let self,
-                      self.signature == expectedSignature,
+                      self.renderGeneration == generation,
+                      self.configurationSignature == expectedConfiguration,
+                      self.revision == expectedRevision,
                       let webView else { return }
                 let controller = webView.configuration.userContentController
                 controller.removeAllUserScripts()
-                if containsMermaid, let script = MermaidRuntime.script {
+                if let script = MermaidRuntime.script {
                     controller.addUserScript(
                         WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
                     )
                 }
-                if containsMath, let script = MathRuntime.script {
+                if let script = MathRuntime.script {
                     controller.addUserScript(
                         WKUserScript(source: script, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
                     )
                 }
                 self.localResourceHandler?.setAllowedRoot(baseURL)
+                self.navigationRevision = expectedRevision
                 webView.loadHTMLString(html, baseURL: baseURL)
+            }
+        }
+
+        func scheduleContentUpdate(markdown: String,
+                                   title: String,
+                                   baseURL: URL?,
+                                   expectedConfiguration: String,
+                                   expectedRevision: Int) {
+            renderTask?.cancel()
+            renderGeneration &+= 1
+            let generation = renderGeneration
+            let position = pendingPosition ?? parent?.scrollPosition ?? ScrollPosition()
+            let preserveSingleLineBreaks = parent?.preserveSingleLineBreaks ?? false
+            renderTask = Task { [weak self, weak webView] in
+                // Coalesce a burst of keystrokes without making typing feel delayed.
+                try? await Task.sleep(for: .milliseconds(42))
+                guard !Task.isCancelled else { return }
+                let payload = await Task.detached(priority: .userInitiated) {
+                    let rendered = MarkdownRenderer.render(
+                        markdown,
+                        preserveSingleLineBreaks: preserveSingleLineBreaks
+                    )
+                    return (
+                        LocalPreviewResources.rewriteLocalMedia(in: rendered, baseURL: baseURL),
+                        max(1, markdown.components(separatedBy: .newlines).count)
+                    )
+                }.value
+                guard !Task.isCancelled,
+                      let self,
+                      self.renderGeneration == generation,
+                      self.configurationSignature == expectedConfiguration,
+                      self.revision == expectedRevision,
+                      let webView else { return }
+
+                self.localResourceHandler?.setAllowedRoot(baseURL)
+                let guide = self.parent?.syncMode.viewportFraction ?? 0.35
+                let updateResult = try? await webView.callAsyncJavaScript(
+                    """
+                    return window.mirrorReplaceContent
+                        ? window.mirrorReplaceContent(content, sourceLines, title, line, fraction, guide, boundary, generation)
+                        : false;
+                    """,
+                    arguments: [
+                        "content": payload.0,
+                        "sourceLines": payload.1,
+                        "title": title,
+                        "line": position.line,
+                        "fraction": min(1, max(0, position.fraction)),
+                        "guide": guide,
+                        "boundary": position.boundary.rawValue,
+                        "generation": generation
+                    ],
+                    in: nil,
+                    contentWorld: .page
+                )
+                guard !Task.isCancelled,
+                      self.renderGeneration == generation,
+                      updateResult as? Bool == true else { return }
+                self.pendingPosition = nil
+                self.lastAppliedPosition = position
+                self.lastAppliedGuide = guide
             }
         }
 
@@ -189,7 +265,7 @@ struct MarkdownPreview: NSViewRepresentable {
                   ProcessInfo.processInfo.systemUptime >= suppressScrollEventsUntil,
                   let webView else { return }
             let guide = parent.syncMode.viewportFraction ?? 0.35
-            webView.evaluateJavaScript("window.moriCurrentPosition && window.moriCurrentPosition(\(guide))") { [weak self] value, _ in
+            webView.evaluateJavaScript("window.mirrorCurrentPosition && window.mirrorCurrentPosition(\(guide))") { [weak self] value, _ in
                 guard let self,
                       generation == self.scrollRequestGeneration,
                       let parent = self.parent,
@@ -198,8 +274,13 @@ struct MarkdownPreview: NSViewRepresentable {
                       let result = value as? [String: Any],
                       let line = result["line"] as? Int,
                       let fraction = result["fraction"] as? Double else { return }
-                let position = ScrollPosition(line: line, fraction: min(1, max(0, fraction)))
+                let boundary = (result["boundary"] as? String)
+                    .flatMap(ScrollBoundary.init(rawValue:)) ?? .none
+                let position = ScrollPosition(line: line,
+                                              fraction: min(1, max(0, fraction)),
+                                              boundary: boundary)
                 if parent.scrollSource == .preview,
+                   position.boundary == parent.scrollPosition.boundary,
                    position.line == parent.scrollPosition.line,
                    abs(position.fraction - parent.scrollPosition.fraction) < 0.012 {
                     return
@@ -212,14 +293,21 @@ struct MarkdownPreview: NSViewRepresentable {
             if scrollObserver == nil { startObservingScroll() }
             let position = pendingPosition ?? parent?.scrollPosition ?? ScrollPosition()
             pendingPosition = nil
-            webView.evaluateJavaScript("if(window.moriRenderAll){window.moriRenderAll()} true") { [weak self, weak webView] _, _ in
+            webView.evaluateJavaScript("if(window.mirrorRenderAll){window.mirrorRenderAll()} true") { [weak self, weak webView] _, _ in
                 guard let self, let webView else { return }
                 self.waitForEnhancements(in: webView, position: position, remainingAttempts: 80)
             }
+            guard navigationRevision != revision, let parent else { return }
+            pendingPosition = parent.scrollPosition
+            scheduleContentUpdate(markdown: parent.markdown,
+                                  title: parent.title,
+                                  baseURL: parent.baseURL,
+                                  expectedConfiguration: configurationSignature,
+                                  expectedRevision: revision)
         }
 
         private func waitForEnhancements(in webView: WKWebView, position: ScrollPosition, remainingAttempts: Int) {
-            webView.evaluateJavaScript("window.moriEnhancementsDone !== false && window.moriMermaidDone !== false && window.moriMathDone !== false && (!window.moriLayoutStable || window.moriLayoutStable())") { [weak self, weak webView] value, _ in
+            webView.evaluateJavaScript("window.mirrorEnhancementsDone !== false && window.mirrorMermaidDone !== false && window.mirrorMathDone !== false && (!window.mirrorLayoutStable || window.mirrorLayoutStable())") { [weak self, weak webView] value, _ in
                 guard let self, let webView else { return }
                 if value as? Bool == true || remainingAttempts <= 0 {
                     DispatchQueue.main.async { [weak self, weak webView] in
@@ -244,7 +332,7 @@ struct MarkdownPreview: NSViewRepresentable {
             pendingScrollUpdate = nil
             scrollRequestGeneration &+= 1
             suppressScrollEventsUntil = ProcessInfo.processInfo.systemUptime + 0.22
-            webView.evaluateJavaScript("window.moriScrollToLine && window.moriScrollToLine(\(position.line), \(min(1, max(0, position.fraction))), \(guide))")
+            webView.evaluateJavaScript("window.mirrorScrollToPosition && window.mirrorScrollToPosition(\(position.line), \(min(1, max(0, position.fraction))), \(guide), '\(position.boundary.rawValue)')")
         }
 
         private func findScrollView(in view: NSView) -> NSScrollView? {
@@ -275,7 +363,7 @@ struct MarkdownPreview: NSViewRepresentable {
 }
 
 private enum LocalPreviewResources {
-    static let scheme = "mori-local"
+    static let scheme = "mirror-local"
 
     static func rewriteLocalMedia(in html: String, baseURL: URL?) -> String {
         guard let baseURL = baseURL?.standardizedFileURL,

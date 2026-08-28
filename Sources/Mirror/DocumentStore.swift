@@ -92,6 +92,7 @@ final class DocumentStore: ObservableObject {
     private var workspaceRefreshID = UUID()
 
     init() {
+        LegacyBrandMigration.performIfNeeded()
         let appearance = AppearanceManager.load()
         theme = appearance.theme
         typography = appearance.typography
@@ -102,7 +103,7 @@ final class DocumentStore: ObservableObject {
         isLoadingAppearance = false
         recentFiles = Self.loadRecentFiles()
         previewFileURL = nil
-        if let path = UserDefaults.standard.string(forKey: "MoriWorkspaceFolder"),
+        if let path = UserDefaults.standard.string(forKey: "MirrorWorkspaceFolder"),
            FileManager.default.fileExists(atPath: path) {
             workspaceURL = URL(fileURLWithPath: path).standardizedFileURL
         } else {
@@ -264,7 +265,7 @@ final class DocumentStore: ObservableObject {
     func exportTheme(_ value: EditorTheme) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.json]
-        panel.nameFieldStringValue = "\(value.name).mori-theme.json"
+        panel.nameFieldStringValue = "\(value.name).mirror-theme.json"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         do {
             let encoder = JSONEncoder()
@@ -499,7 +500,7 @@ final class DocumentStore: ObservableObject {
         workspaceSearchError = nil
         isSearchingWorkspace = false
         workspaceURL = normalized
-        UserDefaults.standard.set(workspaceURL?.path, forKey: "MoriWorkspaceFolder")
+        UserDefaults.standard.set(workspaceURL?.path, forKey: "MirrorWorkspaceFolder")
         refreshWorkspace()
     }
 
@@ -534,7 +535,7 @@ final class DocumentStore: ObservableObject {
         workspaceSearchResults = []
         workspaceSearchError = nil
         isSearchingWorkspace = false
-        UserDefaults.standard.removeObject(forKey: "MoriWorkspaceFolder")
+        UserDefaults.standard.removeObject(forKey: "MirrorWorkspaceFolder")
     }
 
     func createMarkdownFile(in directory: URL) {
@@ -618,7 +619,7 @@ final class DocumentStore: ObservableObject {
         do {
             if isCaseOnlyRename {
                 let temporary = source.deletingLastPathComponent()
-                    .appendingPathComponent(".mori-rename-\(UUID().uuidString)")
+                    .appendingPathComponent(".mirror-rename-\(UUID().uuidString)")
                 try FileManager.default.moveItem(at: normalizedSource, to: temporary)
                 do {
                     try FileManager.default.moveItem(at: temporary, to: destination)
@@ -1076,12 +1077,14 @@ final class DocumentStore: ObservableObject {
         let documentTitle = title
         let selectedTheme = theme
         let selectedTypography = typography
+        let preserveSingleLineBreaks = editorSettings.preserveSingleLineBreaks
         let baseURL = fileURL?.deletingLastPathComponent()
         return await Task.detached(priority: .userInitiated) {
             let html = MarkdownRenderer.document(markdown: markdown,
                                                  title: documentTitle,
                                                  theme: selectedTheme,
                                                  typography: selectedTypography,
+                                                 preserveSingleLineBreaks: preserveSingleLineBreaks,
                                                  embeddedMermaidScript: MermaidRuntime.script,
                                                  embeddedMathScript: MathRuntime.script)
             return MarkdownExportResources.makePortable(html, baseURL: baseURL)
@@ -1462,7 +1465,7 @@ final class DocumentStore: ObservableObject {
             try JSONEncoder().encode(entry).write(to: destination, options: .atomic)
             pruneDocumentHistory(in: directory)
         } catch {
-            NSLog("Mori could not archive document history: %@", error.localizedDescription)
+            NSLog("Mirror could not archive document history: %@", error.localizedDescription)
         }
     }
 
@@ -1489,7 +1492,7 @@ final class DocumentStore: ObservableObject {
                                                   in: .userDomainMask,
                                                   appropriateFor: nil,
                                                   create: create)
-        let root = support.appendingPathComponent("Mori/History", isDirectory: true)
+        let root = support.appendingPathComponent("Mirror/History", isDirectory: true)
         if create { try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true) }
         return root
     }
@@ -1565,7 +1568,7 @@ final class DocumentStore: ObservableObject {
                     }
                     touchedDirectories.insert(targetDirectory)
                 } catch {
-                    NSLog("Mori could not migrate document history: %@", error.localizedDescription)
+                    NSLog("Mirror could not migrate document history: %@", error.localizedDescription)
                 }
             }
             if (try? FileManager.default.contentsOfDirectory(atPath: directory.path).isEmpty) == true {
@@ -1634,7 +1637,7 @@ final class DocumentStore: ObservableObject {
             let url = try Self.recoverySnapshotURL(createFolder: true)
             try JSONEncoder().encode(currentRecoverySession()).write(to: url, options: .atomic)
         } catch {
-            NSLog("Mori could not preserve the editing session: %@", error.localizedDescription)
+            NSLog("Mirror could not preserve the editing session: %@", error.localizedDescription)
         }
     }
 
@@ -1727,7 +1730,7 @@ final class DocumentStore: ObservableObject {
                                                   in: .userDomainMask,
                                                   appropriateFor: nil,
                                                   create: createFolder)
-        let folder = support.appendingPathComponent("Mori/Recovery", isDirectory: true)
+        let folder = support.appendingPathComponent("Mirror/Recovery", isDirectory: true)
         if createFolder { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
         return folder.appendingPathComponent("current-draft.json")
     }
@@ -2079,11 +2082,11 @@ final class DocumentStore: ObservableObject {
     }
 
     private func persistRecentFiles() {
-        UserDefaults.standard.set(recentFiles.map(\.path), forKey: "MoriRecentFiles")
+        UserDefaults.standard.set(recentFiles.map(\.path), forKey: "MirrorRecentFiles")
     }
 
     private static func loadRecentFiles() -> [URL] {
-        let paths = UserDefaults.standard.stringArray(forKey: "MoriRecentFiles") ?? []
+        let paths = UserDefaults.standard.stringArray(forKey: "MirrorRecentFiles") ?? []
         return paths
             .map { URL(fileURLWithPath: $0).standardizedFileURL }
             .filter { FileManager.default.fileExists(atPath: $0.path) }

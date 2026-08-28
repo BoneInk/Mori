@@ -29,7 +29,7 @@ final class MarkdownFileExporter: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        webView.evaluateJavaScript("if(window.moriRenderAll){window.moriRenderAll()} true") { [weak self] _, _ in
+        webView.evaluateJavaScript("if(window.mirrorRenderAll){window.mirrorRenderAll()} true") { [weak self] _, _ in
             self?.waitForEnhancements(remainingAttempts: 100)
         }
     }
@@ -43,7 +43,7 @@ final class MarkdownFileExporter: NSObject, WKNavigationDelegate {
     }
 
     private func waitForEnhancements(remainingAttempts: Int) {
-        webView.evaluateJavaScript("window.moriEnhancementsDone !== false && window.moriMermaidDone !== false && window.moriMathDone !== false && (!window.moriLayoutStable || window.moriLayoutStable())") { [weak self] value, _ in
+        webView.evaluateJavaScript("window.mirrorEnhancementsDone !== false && window.mirrorMermaidDone !== false && window.mirrorMathDone !== false && (!window.mirrorLayoutStable || window.mirrorLayoutStable())") { [weak self] value, _ in
             guard let self else { return }
             if value as? Bool == true || remainingAttempts <= 0 {
                 self.performOperation()

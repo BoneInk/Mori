@@ -15,7 +15,6 @@ A 58-point navigation rail keeps Files, Outline, Search, and Settings close at h
 ### Reader mode
 
 Reader mode presents the rendered document on a centered paper canvas, with floating controls for typography, reading width, theme, focus, and export. Heading navigation and reading progress continue to track the document position.
-
 ![Mirror immersive reader mode with document outline and floating reading tools](docs/images/reader-mode.png)
 
 ### Offline Mermaid diagrams
@@ -28,6 +27,7 @@ Mermaid source renders directly in the preview without a network connection.
 
 - Native Markdown editor with lightweight syntax highlighting
 - Calm native macOS interface with warm neutrals, paper-like content hierarchy, and one muted orange accent
+- Simplified Chinese by default, with an English switch in the Language menu and automatic session restoration
 - Split editing uses the same centered paper preview hierarchy as the immersive reader
 - Persistent navigation rail with a mutually exclusive, resizable shared drawer for Files and Outline
 - Immersive reader canvas with live reading progress and floating typography, line-height, width, theme, focus, and export controls
@@ -36,7 +36,7 @@ Mermaid source renders directly in the preview without a network connection.
 - Custom theme editor with palette duplication, JSON import/export, and persistent selection
 - Independent writing, preview, and code font choices with adjustable size, line spacing, line height, and reading width
 - Private TTF, OTF, and TTC font import; imported fonts stay inside Mirror and do not modify system fonts
-- Configurable line numbers, current-line highlight, spelling, line wrapping, typewriter mode, tab width, and autosave delay
+- Configurable line numbers, current-line highlight, spelling, line wrapping, preserved single line breaks, typewriter mode, tab width, and autosave delay
 - Optional bracket/quote auto-pairing plus selection-aware Tab and Shift-Tab indentation using the configured tab width
 - GitHub-style Markdown tables with alignment and responsive overflow
 - Visual Markdown table builder with configurable rows, columns, per-column alignment, and source preview
@@ -106,11 +106,11 @@ Mathematics rendering uses the MIT-licensed KaTeX runtime and bundled WOFF2 math
 
 ## Themes and fonts
 
-Open **Mirror → Settings** (or press **⌘,**) to choose an included skin, create a custom palette, or configure typography. A custom skin can be exported as a `.mori-theme.json` file and imported on another Mac.
+Open **Mirror → Settings** (or press **⌘,**) to choose an included skin, create a custom palette, or configure typography. A custom skin can be exported as a `.mirror-theme.json` file and imported on another Mac.
 
-Imported font files are stored in `~/Library/Application Support/Mori/Fonts` and registered only while Mirror is running. Removing an imported font from Settings moves Mirror's private copy to Trash.
+Imported font files are stored in `~/Library/Application Support/Mirror/Fonts` and registered only while Mirror is running. Removing an imported font from Settings moves Mirror's private copy to Trash.
 
-Saved document versions are stored privately in `~/Library/Application Support/Mori/History`. Mirror keeps at most 30 versions and 64 MB per document, throttles autosave snapshots, and carries history forward when workspace files or folders are renamed.
+Saved document versions are stored privately in `~/Library/Application Support/Mirror/History`. Mirror keeps at most 30 versions and 64 MB per document, throttles autosave snapshots, and carries history forward when workspace files or folders are renamed.
 
 ## Build
 
@@ -119,16 +119,16 @@ Requires macOS 14 or newer and the Swift 6 toolchain.
 ```bash
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
-open dist/Mori.app
+open dist/Mirror.app
 ```
 
 For development:
 
 ```bash
-swift run Mori
+swift run Mirror
 ```
 
-The release build creates a Universal 2 (`arm64` + `x86_64`) `dist/Mori.app` and applies an ad-hoc local signature. No full Xcode installation is required.
+The release build creates a Universal 2 (`arm64` + `x86_64`) `dist/Mirror.app` and applies an ad-hoc local signature. No full Xcode installation is required.
 
 Create a DMG that installs the app by dragging it into Applications:
 
@@ -137,4 +137,4 @@ chmod +x scripts/build-dmg.sh
 ./scripts/build-dmg.sh
 ```
 
-The installer is written to `dist/Mori-1.0.dmg`. The current build uses an ad-hoc signature; public distribution additionally requires Apple Developer ID signing and Apple notarization.
+The installer is written to `dist/Mirror-1.0.dmg`. The current build uses an ad-hoc signature; public distribution additionally requires Apple Developer ID signing and Apple notarization.

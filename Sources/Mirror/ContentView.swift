@@ -1,26 +1,26 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum MoriMotion {
+private enum MirrorMotion {
     static let fast = Animation.easeOut(duration: 0.14)
     static let control = Animation.easeInOut(duration: 0.2)
     static let panel = Animation.spring(response: 0.32, dampingFraction: 0.88)
     static let navigationPanel = Animation.timingCurve(0.4, 0, 0.2, 1, duration: 0.22)
 }
 
-private func withMoriAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
+private func withMirrorAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
     if reduceMotion {
         updates()
     } else {
-        withAnimation(MoriMotion.panel, updates)
+        withAnimation(MirrorMotion.panel, updates)
     }
 }
 
-private func withMoriNavigationAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
+private func withMirrorNavigationAnimation(_ reduceMotion: Bool, _ updates: () -> Void) {
     if reduceMotion {
         updates()
     } else {
-        withAnimation(MoriMotion.navigationPanel, updates)
+        withAnimation(MirrorMotion.navigationPanel, updates)
     }
 }
 
@@ -128,12 +128,12 @@ struct ContentView: View {
                 .animation(reduceMotion ? nil : .spring(response: 0.35), value: notice)
             }
         }
-        .animation(reduceMotion ? nil : MoriMotion.navigationPanel, value: document.showFileLibrary)
-        .animation(reduceMotion ? nil : MoriMotion.navigationPanel, value: document.showOutline)
-        .animation(reduceMotion ? nil : MoriMotion.navigationPanel, value: document.showSidebar)
-        .animation(reduceMotion ? nil : MoriMotion.control, value: document.focusMode)
-        .animation(reduceMotion ? nil : MoriMotion.fast, value: isDropTarget)
-        .animation(reduceMotion ? nil : MoriMotion.control, value: document.externalConflict)
+        .animation(reduceMotion ? nil : MirrorMotion.navigationPanel, value: document.showFileLibrary)
+        .animation(reduceMotion ? nil : MirrorMotion.navigationPanel, value: document.showOutline)
+        .animation(reduceMotion ? nil : MirrorMotion.navigationPanel, value: document.showSidebar)
+        .animation(reduceMotion ? nil : MirrorMotion.control, value: document.focusMode)
+        .animation(reduceMotion ? nil : MirrorMotion.fast, value: isDropTarget)
+        .animation(reduceMotion ? nil : MirrorMotion.control, value: document.externalConflict)
         .preferredColorScheme(document.theme.isDark ? .dark : .light)
         .ignoresSafeArea(.container, edges: .top)
         .onDrop(of: [UTType.fileURL.identifier], isTargeted: $isDropTarget) { providers in
@@ -197,7 +197,7 @@ private struct MirrorNavigationRail: View {
     var body: some View {
         VStack(spacing: 5) {
             railButton("Files", systemImage: "folder", isActive: filesActive) {
-                withMoriNavigationAnimation(reduceMotion) {
+                withMirrorNavigationAnimation(reduceMotion) {
                     if filesActive {
                         document.showFileLibrary = false
                     } else {
@@ -209,7 +209,7 @@ private struct MirrorNavigationRail: View {
             }
 
             railButton("Outline", systemImage: "list.bullet", isActive: outlineActive) {
-                withMoriNavigationAnimation(reduceMotion) {
+                withMirrorNavigationAnimation(reduceMotion) {
                     if outlineActive {
                         document.showOutline = false
                     } else {
@@ -256,8 +256,8 @@ private struct MirrorNavigationRail: View {
                             in: RoundedRectangle(cornerRadius: 8))
         }
         .buttonStyle(.plain)
-        .help(title)
-        .accessibilityLabel(title)
+        .help(Text(LocalizedStringKey(title)))
+        .accessibilityLabel(Text(LocalizedStringKey(title)))
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 
@@ -265,7 +265,7 @@ private struct MirrorNavigationRail: View {
         VStack(spacing: 2) {
             Image(systemName: systemImage)
                 .font(.system(size: 13, weight: .regular))
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.system(size: 8, weight: .medium))
         }
         .frame(width: 43, height: 43)
@@ -339,12 +339,12 @@ private struct DocumentTabBar: View {
                     }
                 }
                 .padding(.horizontal, 5)
-                .animation(reduceMotion ? nil : MoriMotion.control,
+                .animation(reduceMotion ? nil : MirrorMotion.control,
                            value: document.openTabs.map(\.id))
             }
             Divider().frame(height: 17)
             Button {
-                withMoriAnimation(reduceMotion) { document.newDocument() }
+                withMirrorAnimation(reduceMotion) { document.newDocument() }
             } label: {
                 Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
             }
@@ -383,7 +383,7 @@ private struct DocumentTabItem: View {
             .buttonStyle(.plain)
 
             Button {
-                withMoriAnimation(reduceMotion) { document.closeTab(tab.id) }
+                withMirrorAnimation(reduceMotion) { document.closeTab(tab.id) }
             } label: {
                 Image(systemName: "xmark")
                     .font(.system(size: 8.5, weight: .semibold))
@@ -411,10 +411,10 @@ private struct DocumentTabItem: View {
             if reduceMotion {
                 isHovered = hovering
             } else {
-                withAnimation(MoriMotion.fast) { isHovered = hovering }
+                withAnimation(MirrorMotion.fast) { isHovered = hovering }
             }
         }
-        .animation(reduceMotion ? nil : MoriMotion.fast, value: isActive)
+        .animation(reduceMotion ? nil : MirrorMotion.fast, value: isActive)
         .contextMenu {
             Button("Close") { document.closeTab(tab.id) }
             if let path = tab.filePath ?? tab.previewPath {
@@ -476,10 +476,10 @@ private struct WritingWorkspace: View {
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
         }
-        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.readerMode)
-        .animation(reduceMotion ? nil : MoriMotion.panel, value: document.showPreview)
-        .animation(reduceMotion ? nil : MoriMotion.control, value: document.focusMode)
-        .animation(reduceMotion ? nil : MoriMotion.fast, value: document.text.isEmpty)
+        .animation(reduceMotion ? nil : MirrorMotion.panel, value: document.readerMode)
+        .animation(reduceMotion ? nil : MirrorMotion.panel, value: document.showPreview)
+        .animation(reduceMotion ? nil : MirrorMotion.control, value: document.focusMode)
+        .animation(reduceMotion ? nil : MirrorMotion.fast, value: document.text.isEmpty)
     }
 }
 
@@ -493,6 +493,7 @@ private struct RenderedMarkdownContent: View {
                         title: document.title,
                         theme: document.theme,
                         typography: document.typography,
+                        preserveSingleLineBreaks: document.editorSettings.preserveSingleLineBreaks,
                         baseURL: document.fileURL?.deletingLastPathComponent(),
                         onOpenLocalFile: document.openFile,
                         syncMode: document.editorSettings.scrollSyncMode,
@@ -529,7 +530,10 @@ private struct PaperPreviewSurface: View {
                 let horizontalInset = paperHorizontalInset(for: proxy.size.width)
                 let desiredWidth = CGFloat(document.typography.contentWidth) + (presentation == .reader ? 154 : 112)
                 let paperWidth = min(desiredWidth, max(280, proxy.size.width - horizontalInset * 2))
-                let paperHeight = max(320, proxy.size.height - (presentation == .reader ? 70 : 56))
+                // Keep the reading canvas continuous through the viewport. The
+                // document scrolls inside the paper instead of exposing fixed
+                // top and bottom card edges halfway through a long article.
+                let paperHeight = proxy.size.height + 2
 
                 RenderedMarkdownContent(scrollSync: scrollSync)
                     .frame(width: paperWidth, height: paperHeight)
@@ -538,9 +542,9 @@ private struct PaperPreviewSurface: View {
                         Rectangle()
                             .stroke(Color(hex: document.theme.lineHex).opacity(0.9), lineWidth: 1)
                     }
-                    .shadow(color: document.theme.isDark ? .clear : .black.opacity(0.07),
-                            radius: presentation == .reader ? 18 : 12,
-                            y: presentation == .reader ? 8 : 5)
+                    .shadow(color: document.theme.isDark || presentation == .split ? .clear : .black.opacity(0.07),
+                            radius: 18,
+                            y: 8)
                     .position(x: proxy.size.width / 2, y: proxy.size.height / 2)
             }
 
@@ -629,7 +633,7 @@ private struct ReaderToolDock: View {
             .dockMenuStyle()
 
             Button {
-                withMoriAnimation(reduceMotion) { document.focusMode.toggle() }
+                withMirrorAnimation(reduceMotion) { document.focusMode.toggle() }
             } label: {
                 toolLabel(document.focusMode ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
                           help: document.focusMode ? "Exit focus mode" : "Focus mode",
@@ -660,9 +664,13 @@ private struct ReaderToolDock: View {
             document.typography.contentWidth = width
         } label: {
             if document.typography.contentWidth == width {
-                Label(title, systemImage: "checkmark")
+                Label {
+                    Text(LocalizedStringKey(title))
+                } icon: {
+                    Image(systemName: "checkmark")
+                }
             } else {
-                Text(title)
+                Text(LocalizedStringKey(title))
             }
         }
     }
@@ -678,8 +686,8 @@ private struct ReaderToolDock: View {
             }
             .shadow(color: document.theme.isDark ? .clear : .black.opacity(0.07), radius: 5, y: 2)
             .contentShape(Circle())
-            .help(help)
-            .accessibilityLabel(help)
+            .help(Text(LocalizedStringKey(help)))
+            .accessibilityLabel(Text(LocalizedStringKey(help)))
     }
 }
 
@@ -698,11 +706,11 @@ private struct WorkspacePaneHeader: View {
 
     var body: some View {
         HStack {
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.system(size: 9.5, weight: .semibold))
                 .tracking(0.45)
             Spacer()
-            Text(detail)
+            Text(LocalizedStringKey(detail))
                 .font(.system(size: 9, weight: .regular))
                 .foregroundStyle(.tertiary)
         }
@@ -852,13 +860,17 @@ private struct WorkspaceModeControl: View {
                             isActive: Bool,
                             action: @escaping () -> Void) -> some View {
         Button {
-            withMoriAnimation(reduceMotion, action)
+            withMirrorAnimation(reduceMotion, action)
         } label: {
             Group {
                 if compact {
                     Image(systemName: systemImage)
                 } else {
-                    Label(title, systemImage: systemImage)
+                    Label {
+                        Text(LocalizedStringKey(title))
+                    } icon: {
+                        Image(systemName: systemImage)
+                    }
                 }
             }
                 .font(.system(size: 9.5, weight: .medium))
@@ -869,8 +881,8 @@ private struct WorkspaceModeControl: View {
                             in: RoundedRectangle(cornerRadius: 5))
         }
         .buttonStyle(.plain)
-        .animation(reduceMotion ? nil : MoriMotion.control, value: isActive)
-        .accessibilityLabel(title + " mode")
+        .animation(reduceMotion ? nil : MirrorMotion.control, value: isActive)
+        .accessibilityLabel(Text(LocalizedStringKey(title)))
         .accessibilityAddTraits(isActive ? .isSelected : [])
     }
 }
@@ -888,8 +900,16 @@ private struct MoreActionsMenu: View {
                 .disabled(document.fileURL == nil || document.previewFileURL != nil)
             Divider()
             Menu("Theme") {
-                Picker("Theme", selection: $document.theme) {
-                    ForEach(document.availableThemes) { theme in Text(theme.name).tag(theme) }
+                ForEach(document.availableThemes) { theme in
+                    Button {
+                        document.selectTheme(theme)
+                    } label: {
+                        if document.theme.id == theme.id {
+                            Label(theme.name, systemImage: "checkmark")
+                        } else {
+                            Text(theme.name)
+                        }
+                    }
                 }
             }
             SettingsLink { Label("Typography and Appearance", systemImage: "textformat.size") }
@@ -1168,15 +1188,15 @@ private struct SidebarEmptyState: View {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .light))
                 .foregroundStyle(document.theme.accent.opacity(0.75))
-            Text(title)
+            Text(LocalizedStringKey(title))
                 .font(.system(size: 10.5, weight: .medium))
-            Text(detail)
+            Text(LocalizedStringKey(detail))
                 .font(.system(size: 9.5))
                 .foregroundStyle(.tertiary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             if let actionTitle, let action {
-                Button(actionTitle, action: action)
+                Button(LocalizedStringKey(actionTitle), action: action)
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .tint(document.theme.accent)
@@ -1204,10 +1224,10 @@ private struct QuietRowSurface: ViewModifier {
                 if reduceMotion {
                     isHovered = hovering
                 } else {
-                    withAnimation(MoriMotion.fast) { isHovered = hovering }
+                    withAnimation(MirrorMotion.fast) { isHovered = hovering }
                 }
             }
-            .animation(reduceMotion ? nil : MoriMotion.fast, value: isSelected)
+            .animation(reduceMotion ? nil : MirrorMotion.fast, value: isSelected)
     }
 
     private var surfaceColor: Color {
@@ -1459,8 +1479,8 @@ private struct WorkspaceFileRow: View {
 }
 
 private enum WorkspaceTransfer {
-    static let cutType = "com.local.mori.workspace-cut"
-    private static let selectionType = "com.local.mori.workspace-selection"
+    static let cutType = "com.local.mirror.workspace-cut"
+    private static let selectionType = "com.local.mirror.workspace-selection"
     static let dropTypes = [UTType.fileURL.identifier, selectionType]
     static let pasteTypes: [UTType] = [.fileURL]
 
@@ -1553,16 +1573,20 @@ private struct StatusBar: View {
     @ViewBuilder
     private func statusContent(compact: Bool) -> some View {
         HStack(spacing: 15) {
-            Label(document.isDirty ? "Edited" : "Saved", systemImage: document.isDirty ? "circle.fill" : "checkmark.circle")
+            Label {
+                Text(LocalizedStringKey(document.isDirty ? "Edited" : "Saved"))
+            } icon: {
+                Image(systemName: document.isDirty ? "circle.fill" : "checkmark.circle")
+            }
                 .labelStyle(.titleAndIcon)
             Spacer()
             if let url = document.previewFileURL {
-                Text(url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased())
+                Text(LocalizedStringKey(url.pathExtension.isEmpty ? "File" : url.pathExtension.uppercased()))
                 if !compact {
-                    Text(document.isImageFile(url) ? "Mirror image preview" : "System preview")
+                    Text(LocalizedStringKey(document.isImageFile(url) ? "Mirror image preview" : "System preview"))
                 }
             } else {
-                Text(document.readerMode ? "Reader" : document.documentFormat.label)
+                Text(LocalizedStringKey(document.readerMode ? "Reader" : document.documentFormat.label))
                 if !compact {
                     Menu {
                         ForEach(document.encodingChoices) { choice in

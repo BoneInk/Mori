@@ -1,6 +1,6 @@
 # Mirror Immersive Reader UI Demo
 
-这是 Mirror 的独立界面方向，只用于评审，不参与应用构建，也未修改 `Sources/Mori` 下的正式界面。
+这是 Mirror 的独立界面方向，只用于评审，不参与应用构建，也未修改 `Sources/Mirror` 下的正式界面。
 
 ![Mirror 沉浸式阅读 Demo](preview.png)
 

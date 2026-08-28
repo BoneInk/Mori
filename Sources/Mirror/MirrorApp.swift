@@ -1,42 +1,42 @@
 import SwiftUI
 
 @main
-struct MoriApp: App {
+struct MirrorApp: App {
     @StateObject private var document = DocumentStore()
+    @StateObject private var language = AppLanguageStore()
 
     var body: some Scene {
         Window("Mirror", id: "main") {
-            ContentView()
-                .environmentObject(document)
+            LocalizedContentRoot(document: document, language: language)
                 .frame(minWidth: 1120, minHeight: 620)
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact(showsTitle: false))
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Document") { document.newDocument() }
+                Button(language.text("New Document")) { document.newDocument() }
                     .keyboardShortcut("n")
-                Button("Open…") { document.openDocument() }
+                Button(language.text("Open…")) { document.openDocument() }
                     .keyboardShortcut("o")
                 Divider()
-                Button("Save") { document.save() }
+                Button(language.text("Save")) { document.save() }
                     .keyboardShortcut("s")
-                Button("Save As…") { document.saveAs() }
+                Button(language.text("Save As…")) { document.saveAs() }
                     .keyboardShortcut("s", modifiers: [.command, .shift])
                 Divider()
-                Button("Export HTML…") { document.exportHTML() }
+                Button(language.text("Export HTML…")) { document.exportHTML() }
                     .keyboardShortcut("e", modifiers: [.command, .shift])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.isExportingDocument)
-                Button("Export PDF…") { document.exportPDF() }
+                Button(language.text("Export PDF…")) { document.exportPDF() }
                     .keyboardShortcut("p", modifiers: [.command, .option])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.isExportingDocument)
-                Button("Print…") { document.printDocument() }
+                Button(language.text("Print…")) { document.printDocument() }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.isExportingDocument)
             }
-            CommandMenu("View") {
-                Button("Toggle Navigation") { document.toggleNavigation() }
+            CommandMenu(language.text("View")) {
+                Button(language.text("Toggle Navigation")) { document.toggleNavigation() }
                     .keyboardShortcut("1", modifiers: [.command, .option])
-                Button("Toggle File Library") {
+                Button(language.text("Toggle File Library")) {
                     if document.showSidebar && document.showFileLibrary && !document.showOutline {
                         document.showFileLibrary = false
                     } else {
@@ -45,7 +45,7 @@ struct MoriApp: App {
                         document.showOutline = false
                     }
                 }
-                Button("Toggle Document Outline") {
+                Button(language.text("Toggle Document Outline")) {
                     if document.showSidebar && document.showOutline {
                         document.showOutline = false
                     } else {
@@ -54,86 +54,86 @@ struct MoriApp: App {
                         document.showFileLibrary = false
                     }
                 }
-                Button("Toggle Preview") { document.showPreview.toggle() }
+                Button(language.text("Toggle Preview")) { document.showPreview.toggle() }
                     .keyboardShortcut("2", modifiers: [.command, .option])
-                Button("Focus Mode") { document.focusMode.toggle() }
+                Button(language.text("Focus Mode")) { document.focusMode.toggle() }
                     .keyboardShortcut("j", modifiers: [.command, .shift])
-                Button("Reader Mode") { document.toggleReaderMode() }
+                Button(language.text("Reader Mode")) { document.toggleReaderMode() }
                     .keyboardShortcut("r", modifiers: [.command, .shift])
             }
-            CommandMenu("Navigate") {
-                Button("Command Palette…") { document.showCommandPalette = true }
+            CommandMenu(language.text("Navigate")) {
+                Button(language.text("Command Palette…")) { document.showCommandPalette = true }
                     .keyboardShortcut("p", modifiers: [.command, .shift])
-                Button("Quick Open…") { document.showQuickOpen = true }
+                Button(language.text("Quick Open…")) { document.showQuickOpen = true }
                     .keyboardShortcut("p")
-                Button("Search in Folder…") { document.showWorkspaceSearch = true }
+                Button(language.text("Search in Folder…")) { document.showWorkspaceSearch = true }
                     .keyboardShortcut("f", modifiers: [.command, .shift])
                 Divider()
-                Button("Find in Document…") { document.showFind() }
+                Button(language.text("Find in Document…")) { document.showFind() }
                     .keyboardShortcut("f")
                     .disabled(document.previewFileURL != nil || document.readerMode)
-                Button("Find and Replace…") { document.showReplace() }
+                Button(language.text("Find and Replace…")) { document.showReplace() }
                     .keyboardShortcut("f", modifiers: [.command, .option])
                     .disabled(document.previewFileURL != nil || document.readerMode)
-                Button("Go to Line…") { document.goToLine() }
+                Button(language.text("Go to Line…")) { document.goToLine() }
                     .keyboardShortcut("g", modifiers: [.control])
                     .disabled(document.previewFileURL != nil || document.readerMode)
-                Button("Document History…") { document.showDocumentHistory = true }
+                Button(language.text("Document History…")) { document.showDocumentHistory = true }
                     .keyboardShortcut("h", modifiers: [.command, .shift])
                     .disabled(document.fileURL == nil || document.previewFileURL != nil)
                 Divider()
-                Button("Previous Tab") { document.selectNextTab(offset: -1) }
+                Button(language.text("Previous Tab")) { document.selectNextTab(offset: -1) }
                     .keyboardShortcut("[", modifiers: [.command, .shift])
                     .disabled(document.openTabs.count < 2)
-                Button("Next Tab") { document.selectNextTab(offset: 1) }
+                Button(language.text("Next Tab")) { document.selectNextTab(offset: 1) }
                     .keyboardShortcut("]", modifiers: [.command, .shift])
                     .disabled(document.openTabs.count < 2)
-                Button("Close Tab") {
+                Button(language.text("Close Tab")) {
                     if let id = document.activeTabID { document.closeTab(id) }
                 }
                 .keyboardShortcut("w")
             }
-            CommandMenu("Format") {
-                Button("Heading") { document.insert(prefix: "## ") }
+            CommandMenu(language.text("Format")) {
+                Button(language.text("Heading")) { document.insert(prefix: "## ") }
                     .keyboardShortcut("2", modifiers: [.command])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Bold") { document.wrapSelection(left: "**", right: "**", placeholder: "bold text") }
+                Button(language.text("Bold")) { document.wrapSelection(left: "**", right: "**", placeholder: "bold text") }
                     .keyboardShortcut("b")
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Italic") { document.wrapSelection(left: "_", right: "_", placeholder: "italic text") }
+                Button(language.text("Italic")) { document.wrapSelection(left: "_", right: "_", placeholder: "italic text") }
                     .keyboardShortcut("i")
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Inline Code") { document.wrapSelection(left: "`", right: "`", placeholder: "code") }
+                Button(language.text("Inline Code")) { document.wrapSelection(left: "`", right: "`", placeholder: "code") }
                     .keyboardShortcut("k", modifiers: [.command, .shift])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Strikethrough") { document.wrapSelection(left: "~~", right: "~~", placeholder: "struck text") }
+                Button(language.text("Strikethrough")) { document.wrapSelection(left: "~~", right: "~~", placeholder: "struck text") }
                     .keyboardShortcut("x", modifiers: [.command, .shift])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Link") { document.wrapSelection(left: "[", right: "](https://)", placeholder: "link text") }
+                Button(language.text("Link")) { document.wrapSelection(left: "[", right: "](https://)", placeholder: "link text") }
                     .keyboardShortcut("k")
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Insert Image…") { document.chooseImagesToInsert() }
+                Button(language.text("Insert Image…")) { document.chooseImagesToInsert() }
                     .keyboardShortcut("i", modifiers: [.command, .option])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.readerMode)
                 Divider()
-                Button("Bulleted List") { document.insert(prefix: "- ") }
+                Button(language.text("Bulleted List")) { document.insert(prefix: "- ") }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Numbered List") { document.insert(prefix: "1. ") }
+                Button(language.text("Numbered List")) { document.insert(prefix: "1. ") }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Block Quote") { document.insert(prefix: "> ") }
+                Button(language.text("Block Quote")) { document.insert(prefix: "> ") }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Table…") { document.showTableBuilder = true }
+                Button(language.text("Table…")) { document.showTableBuilder = true }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil || document.readerMode)
                 Divider()
-                Button("Inline Math") { document.wrapSelection(left: "$", right: "$", placeholder: "E = mc^2") }
+                Button(language.text("Inline Math")) { document.wrapSelection(left: "$", right: "$", placeholder: "E = mc^2") }
                     .keyboardShortcut("m", modifiers: [.command, .control])
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Display Math") { document.wrapSelection(left: "$$\n", right: "\n$$", placeholder: "\\int_0^1 x^2\\,dx") }
+                Button(language.text("Display Math")) { document.wrapSelection(left: "$$\n", right: "\n$$", placeholder: "\\int_0^1 x^2\\,dx") }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
-                Button("Fenced Code Block") { document.wrapSelection(left: "```text\n", right: "\n```", placeholder: "code") }
+                Button(language.text("Fenced Code Block")) { document.wrapSelection(left: "```text\n", right: "\n```", placeholder: "code") }
                     .disabled(!document.isMarkdownDocument || document.previewFileURL != nil)
             }
-            CommandMenu("Appearance") {
+            CommandMenu(language.text("Appearance")) {
                 ForEach(document.availableThemes) { theme in
                     Button {
                         document.selectTheme(theme)
@@ -146,13 +146,50 @@ struct MoriApp: App {
                     }
                 }
                 Divider()
-                SettingsLink { Text("Theme & Typography Settings…") }
+                SettingsLink { Text(language.text("Theme & Typography Settings…")) }
+            }
+            CommandMenu("语言 / Language") {
+                ForEach(AppLanguage.allCases) { option in
+                    Button {
+                        document.persistForApplicationTermination()
+                        language.selectAndRelaunch(option)
+                    } label: {
+                        if language.selection == option {
+                            Label(option.menuTitle, systemImage: "checkmark")
+                        } else {
+                            Text(option.menuTitle)
+                        }
+                    }
+                }
             }
         }
 
         Settings {
-            AppearanceSettingsView()
-                .environmentObject(document)
+            LocalizedSettingsRoot(document: document, language: language)
         }
+    }
+}
+
+private struct LocalizedContentRoot: View {
+    @ObservedObject var document: DocumentStore
+    @ObservedObject var language: AppLanguageStore
+
+    var body: some View {
+        ContentView()
+            .environmentObject(document)
+            .environment(\.locale, language.locale)
+            .id(language.selection.rawValue)
+    }
+}
+
+private struct LocalizedSettingsRoot: View {
+    @ObservedObject var document: DocumentStore
+    @ObservedObject var language: AppLanguageStore
+
+    var body: some View {
+        AppearanceSettingsView()
+            .environmentObject(document)
+            .environment(\.locale, language.locale)
+            .id(language.selection.rawValue)
     }
 }

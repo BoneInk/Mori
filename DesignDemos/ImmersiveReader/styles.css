@@ -30,7 +30,7 @@ svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width:
 .symbol-sprite { position: fixed; width: 0; height: 0; overflow: hidden; }
 
 .demo-stage { width: 100vw; height: 100vh; display: grid; place-items: center; padding: 20px; }
-.mori-shell {
+.mirror-shell {
   width: min(1500px, 100%); height: min(940px, 100%); min-height: 660px;
   display: grid; grid-template-rows: 54px 36px minmax(0, 1fr) 29px;
   overflow: hidden; border: 1px solid #c8c6c0; border-radius: 14px; background: var(--chrome);
@@ -63,7 +63,7 @@ svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width:
 .tab-add { width: 30px; height: 32px; display: grid; place-items: center; color: var(--faint); cursor: pointer; }.tab-add svg { width: 13px; height: 13px; }
 
 .workspace { min-width: 0; min-height: 0; display: grid; grid-template-columns: 58px 0 minmax(0, 1fr); transition: grid-template-columns 220ms cubic-bezier(.4,0,.2,1); }
-.mori-shell.panel-open .workspace { grid-template-columns: 58px var(--panel-width) minmax(0, 1fr); }
+.mirror-shell.panel-open .workspace { grid-template-columns: 58px var(--panel-width) minmax(0, 1fr); }
 .navigation-rail { min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 13px 7px 9px; border-right: 1px solid var(--line); background: var(--rail); z-index: 3; }
 .navigation-rail button { width: 43px; height: 43px; display: grid; place-items: center; align-content: center; gap: 2px; border-radius: 8px; color: var(--muted); font-size: 8px; cursor: pointer; }
 .navigation-rail button svg { width: 16px; height: 16px; }.navigation-rail button:hover { background: rgba(41,45,43,.05); color: var(--ink); }
@@ -119,10 +119,10 @@ svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width:
 .editor-surface { display: none; grid-template-rows: 31px minmax(0,1fr); background: #fbfaf7; }
 .surface-label { display: flex; align-items: center; justify-content: space-between; padding: 0 17px; border-bottom: 1px solid var(--soft-line); color: var(--muted); font-size: 9px; font-weight: 650; letter-spacing: .08em; }.surface-label small { color: var(--faint); font-weight: 450; letter-spacing: 0; }
 .source-scroll { min-height: 0; overflow: auto; }.source-scroll pre { min-height: 100%; margin: 0; padding: 34px 38px 70px 0; color: #3f4441; font: 12px/1.95 "SFMono-Regular", Menlo, monospace; white-space: pre-wrap; }.source-scroll b { color: #8d463a; font-weight: 620; }.source-scroll .ln { display: inline-block; width: 52px; padding-right: 14px; color: #b4b5b1; font-size: 9.5px; text-align: right; user-select: none; }
-.mori-shell[data-mode="edit"] .reader-surface { display: none; }.mori-shell[data-mode="edit"] .editor-surface { display: grid; }
-.mori-shell[data-mode="split"] .document-stage { grid-template-columns: minmax(320px, .86fr) minmax(420px, 1.14fr); }.mori-shell[data-mode="split"] .editor-surface, .mori-shell[data-mode="split"] .reader-surface { display: grid; grid-area: auto; }.mori-shell[data-mode="split"] .editor-surface { border-right: 1px solid var(--line); }.mori-shell[data-mode="split"] .reader-surface { display: block; padding: 30px 52px 70px; }.mori-shell[data-mode="split"] .reader-paper { width: min(650px, 100%); padding-inline: 55px; }.mori-shell[data-mode="split"] .reading-tools { display: none; }
-.mori-shell.focus-mode .navigation-rail, .mori-shell.focus-mode .context-panel, .mori-shell.focus-mode .tab-strip, .mori-shell.focus-mode .status-bar { display: none; }.mori-shell.focus-mode { grid-template-rows: 54px minmax(0,1fr); }.mori-shell.focus-mode .window-bar { grid-row: 1; }.mori-shell.focus-mode .workspace { grid-row: 2; grid-template-columns: 1fr; }.mori-shell.focus-mode .document-stage { grid-column: 1; }.reader-paper.wide { --article-width: 880px; }.reader-paper.compact { --article-width: 620px; }
-.mori-shell.sepia { --canvas: #e5dfd3; --paper: #fbf3e4; --soft-line: #e4dac9; }.mori-shell.night { --canvas: #1d211f; --paper: #282d2a; --ink: #e8e7e0; --body: #cbc9c0; --muted: #9d9f99; --faint: #797d78; --soft-line: #414642; }.mori-shell.night .reader-paper h1, .mori-shell.night .reader-paper h2, .mori-shell.night .reader-paper h3 { color: #efeee8; }.mori-shell.night .reader-paper { border-color: #3a3f3b; box-shadow: none; }.mori-shell.night .reader-paper blockquote { background: #303531; }
+.mirror-shell[data-mode="edit"] .reader-surface { display: none; }.mirror-shell[data-mode="edit"] .editor-surface { display: grid; }
+.mirror-shell[data-mode="split"] .document-stage { grid-template-columns: minmax(320px, .86fr) minmax(420px, 1.14fr); }.mirror-shell[data-mode="split"] .editor-surface, .mirror-shell[data-mode="split"] .reader-surface { display: grid; grid-area: auto; }.mirror-shell[data-mode="split"] .editor-surface { border-right: 1px solid var(--line); }.mirror-shell[data-mode="split"] .reader-surface { display: block; padding: 30px 52px 70px; }.mirror-shell[data-mode="split"] .reader-paper { width: min(650px, 100%); padding-inline: 55px; }.mirror-shell[data-mode="split"] .reading-tools { display: none; }
+.mirror-shell.focus-mode .navigation-rail, .mirror-shell.focus-mode .context-panel, .mirror-shell.focus-mode .tab-strip, .mirror-shell.focus-mode .status-bar { display: none; }.mirror-shell.focus-mode { grid-template-rows: 54px minmax(0,1fr); }.mirror-shell.focus-mode .window-bar { grid-row: 1; }.mirror-shell.focus-mode .workspace { grid-row: 2; grid-template-columns: 1fr; }.mirror-shell.focus-mode .document-stage { grid-column: 1; }.reader-paper.wide { --article-width: 880px; }.reader-paper.compact { --article-width: 620px; }
+.mirror-shell.sepia { --canvas: #e5dfd3; --paper: #fbf3e4; --soft-line: #e4dac9; }.mirror-shell.night { --canvas: #1d211f; --paper: #282d2a; --ink: #e8e7e0; --body: #cbc9c0; --muted: #9d9f99; --faint: #797d78; --soft-line: #414642; }.mirror-shell.night .reader-paper h1, .mirror-shell.night .reader-paper h2, .mirror-shell.night .reader-paper h3 { color: #efeee8; }.mirror-shell.night .reader-paper { border-color: #3a3f3b; box-shadow: none; }.mirror-shell.night .reader-paper blockquote { background: #303531; }
 
 .status-bar { display: flex; align-items: center; gap: 15px; padding: 0 13px 0 70px; border-top: 1px solid var(--line); color: var(--faint); background: var(--chrome); font-size: 9.5px; }.saved { display: flex; align-items: center; gap: 5px; color: var(--muted); }.saved svg { width: 12px; height: 12px; color: #4d8177; }.status-spacer { flex: 1; }
 

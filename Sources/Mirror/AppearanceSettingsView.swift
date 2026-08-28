@@ -42,10 +42,12 @@ private struct EditorBehaviorSettingsView: View {
                     Toggle("Check spelling in Markdown", isOn: $document.editorSettings.checkSpelling)
                     Toggle("Wrap long lines", isOn: $document.editorSettings.wordWrap)
                     Toggle("Typewriter mode keeps the insertion point centered", isOn: $document.editorSettings.typewriterMode)
+                    Toggle("Preserve single line breaks in preview and exports",
+                           isOn: $document.editorSettings.preserveSingleLineBreaks)
                     Toggle("Automatically close brackets and quotes", isOn: $document.editorSettings.autoPairDelimiters)
                     Picker("Source and preview scroll sync", selection: $document.editorSettings.scrollSyncMode) {
                         ForEach(ScrollSyncMode.allCases) { mode in
-                            Text(mode.label).tag(mode)
+                            Text(LocalizedStringKey(mode.label)).tag(mode)
                         }
                     }
                 }
@@ -149,7 +151,8 @@ private struct ThemeSettingsView: View {
     private func themeSection(_ title: String, themes: [EditorTheme]) -> some View {
         if !themes.isEmpty {
             VStack(alignment: .leading, spacing: 9) {
-                Text(title.uppercased())
+                Text(LocalizedStringKey(title))
+                    .textCase(.uppercase)
                     .font(.caption.bold()).tracking(1.1).foregroundStyle(.secondary)
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                     ForEach(themes) { theme in
@@ -364,8 +367,8 @@ private struct TypographySettingsView: View {
 
     @ViewBuilder
     private func fontPicker(_ title: String, selection: Binding<String?>, systemLabel: String) -> some View {
-        Picker(title, selection: selection) {
-            Text(systemLabel).tag(String?.none)
+        Picker(LocalizedStringKey(title), selection: selection) {
+            Text(LocalizedStringKey(systemLabel)).tag(String?.none)
             Divider()
             ForEach(document.availableFontFamilies, id: \.self) { family in
                 Text(family).font(.custom(family, size: 13)).tag(Optional(family))
@@ -382,7 +385,7 @@ private struct TypographySettingsView: View {
                              decimals: Int = 0,
                              step: Double = 0.5) -> some View {
         HStack {
-            Text(title).frame(width: 135, alignment: .leading)
+            Text(LocalizedStringKey(title)).frame(width: 135, alignment: .leading)
             Slider(value: value, in: range, step: step)
             Text("\(value.wrappedValue, specifier: decimals == 0 ? "%.0f" : "%.2f")\(suffix)")
                 .monospacedDigit().foregroundStyle(.secondary).frame(width: 62, alignment: .trailing)

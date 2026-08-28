@@ -7,7 +7,7 @@ func fail(_ message: String) -> Never {
 }
 
 let root = URL(fileURLWithPath: NSTemporaryDirectory())
-    .appendingPathComponent("MoriDocumentStoreSmoke-\(UUID().uuidString)", isDirectory: true)
+    .appendingPathComponent("MirrorDocumentStoreSmoke-\(UUID().uuidString)", isDirectory: true)
 try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
 let markdownURL = root.appendingPathComponent("alpha.md")
 let sourceURL = root.appendingPathComponent("beta.swift")
@@ -59,11 +59,11 @@ Task { @MainActor in
     guard store.fileURL == unknownTextURL.standardizedFileURL,
           store.previewFileURL == nil,
           store.text.contains("uncommon extension") else {
-        fail("A valid text file with an uncommon extension was not opened in Mori's editor.")
+        fail("A valid text file with an uncommon extension was not opened in Mirror's editor.")
     }
     store.openFile(imageURL)
     guard store.previewFileURL == imageURL.standardizedFileURL, store.fileURL == nil else {
-        fail("An image file was not routed to Mori's in-app image preview.")
+        fail("An image file was not routed to Mirror's in-app image preview.")
     }
 
     guard let markdownTab = store.openTabs.first(where: { $0.filePath == markdownURL.path }),

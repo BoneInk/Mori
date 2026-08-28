@@ -28,6 +28,7 @@ Mermaid 源码可以在无网络环境下直接渲染到预览区。
 
 - 原生 Markdown 编辑器，支持轻量语法高亮
 - 原生 macOS 简约界面，使用暖灰背景、纸张式内容层级和单一低饱和橙色强调色
+- 默认简体中文界面，可从“语言 / Language”菜单切换 English，并自动恢复当前会话
 - 编辑与实时预览分栏同样使用居中纸张画布，与沉浸阅读模式保持一致的排版层级
 - 常驻导航窄栏，文件树与文档大纲使用互斥、可调宽的共享抽屉，并可分别关闭
 - 沉浸式阅读画布，提供实时阅读进度和字体、行高、页面宽度、主题及导出浮动工具
@@ -36,7 +37,7 @@ Mermaid 源码可以在无网络环境下直接渲染到预览区。
 - 自定义主题编辑器，支持复制配色、JSON 导入/导出和选择持久化
 - 写作、预览和代码字体可独立设置，支持调整字号、行距、行高和阅读宽度
 - 私有导入 TTF、OTF 和 TTC 字体；字体仅保存在 Mirror 内，不会修改系统字体
-- 可配置行号、当前行高亮、拼写检查、自动换行、打字机模式、Tab 宽度和自动保存延迟
+- 可配置行号、当前行高亮、拼写检查、自动换行、单换行保留、打字机模式、Tab 宽度和自动保存延迟
 - 可选括号/引号自动配对，Tab 与 Shift-Tab 根据设置宽度对选中内容缩进
 - 支持 GitHub 风格 Markdown 表格、对齐方式和自适应溢出
 - 可视化 Markdown 表格构建器，可配置行列、每列对齐方式并预览源码
@@ -106,11 +107,11 @@ sequenceDiagram
 
 ## 主题与字体
 
-打开 **Mirror → 设置**（或按 **⌘,**）可选择内置外观、创建自定义配色或配置排版。自定义外观可导出为 `.mori-theme.json` 文件，并导入到另一台 Mac。
+打开 **Mirror → 设置**（或按 **⌘,**）可选择内置外观、创建自定义配色或配置排版。自定义外观可导出为 `.mirror-theme.json` 文件，并导入到另一台 Mac。
 
-导入的字体保存在 `~/Library/Application Support/Mori/Fonts`，仅在 Mirror 运行时注册。从设置中移除字体时，Mirror 会将它的私有副本移到废纸篓。
+导入的字体保存在 `~/Library/Application Support/Mirror/Fonts`，仅在 Mirror 运行时注册。从设置中移除字体时，Mirror 会将它的私有副本移到废纸篓。
 
-文档历史版本私有保存在 `~/Library/Application Support/Mori/History`。Mirror 为每篇文档最多保留 30 个版本和 64 MB，限流自动保存快照，并在工作区文件或文件夹重命名时继承历史。
+文档历史版本私有保存在 `~/Library/Application Support/Mirror/History`。Mirror 为每篇文档最多保留 30 个版本和 64 MB，限流自动保存快照，并在工作区文件或文件夹重命名时继承历史。
 
 ## 构建
 
@@ -119,16 +120,16 @@ sequenceDiagram
 ```bash
 chmod +x scripts/build-app.sh
 ./scripts/build-app.sh
-open dist/Mori.app
+open dist/Mirror.app
 ```
 
 开发模式：
 
 ```bash
-swift run Mori
+swift run Mirror
 ```
 
-发布构建会生成 Universal 2（`arm64` + `x86_64`）的 `dist/Mori.app`，并应用本地临时签名。无需安装完整 Xcode。
+发布构建会生成 Universal 2（`arm64` + `x86_64`）的 `dist/Mirror.app`，并应用本地临时签名。无需安装完整 Xcode。
 
 生成可拖入“应用程序”目录安装的 DMG：
 
@@ -137,4 +138,4 @@ chmod +x scripts/build-dmg.sh
 ./scripts/build-dmg.sh
 ```
 
-安装包输出到 `dist/Mori-1.0.dmg`。当前构建使用本地临时签名；公开分发时还需要 Apple Developer ID 签名和 Apple 公证。
+安装包输出到 `dist/Mirror-1.0.dmg`。当前构建使用本地临时签名；公开分发时还需要 Apple Developer ID 签名和 Apple 公证。

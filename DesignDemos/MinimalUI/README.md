@@ -1,16 +1,16 @@
-# Mori Minimal UI Demo
+# Mirror Minimal UI Demo
 
-这是 Mori 简约风界面的独立原型与落地记录。原型文件不会参与应用构建；确认方向后，正式 SwiftUI 界面已分轮实现。
+这是 Mirror 简约风界面的独立原型与落地记录。原型文件不会参与应用构建；确认方向后，正式 SwiftUI 界面已分轮实现。
 
-![Mori 简约风主窗口 Demo](preview.png)
+![Mirror 简约风主窗口 Demo](preview.png)
 
 正式 SwiftUI 界面的首轮实现效果：
 
-![Mori 原生 SwiftUI 简约界面](native-preview.png)
+![Mirror 原生 SwiftUI 简约界面](native-preview.png)
 
 第二轮细节精修效果：
 
-![Mori 简约界面第二轮](round-2-preview.png)
+![Mirror 简约界面第二轮](round-2-preview.png)
 
 ## 查看方式
 

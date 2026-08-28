@@ -1,4 +1,4 @@
-const shell = document.getElementById('mori-shell');
+const shell = document.getElementById('mirror-shell');
 const reader = document.querySelector('.reader-surface');
 const paper = document.getElementById('reader-paper');
 const progressBar = document.getElementById('progress-bar');

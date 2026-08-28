@@ -4,8 +4,8 @@ import Foundation
 import UniformTypeIdentifiers
 
 enum AppearanceManager {
-    private static let preferencesKey = "MoriAppearancePreferencesV1"
-    private static let customThemesKey = "MoriCustomThemesV1"
+    private static let preferencesKey = "MirrorAppearancePreferencesV1"
+    private static let customThemesKey = "MirrorCustomThemesV1"
 
     struct Preferences: Codable {
         var selectedThemeID: String
@@ -93,7 +93,7 @@ enum AppearanceManager {
                                                   in: .userDomainMask,
                                                   appropriateFor: nil,
                                                   create: create)
-        let folder = support.appendingPathComponent("Mori/Fonts", isDirectory: true)
+        let folder = support.appendingPathComponent("Mirror/Fonts", isDirectory: true)
         if create { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) }
         return folder
     }

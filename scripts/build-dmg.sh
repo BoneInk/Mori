@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
-APP_DIR="$PROJECT_DIR/dist/Mori.app"
+APP_DIR="$PROJECT_DIR/dist/Mirror.app"
 INFO_PLIST="$PROJECT_DIR/Resources/Info.plist"
 SKIP_BUILD=false
 
@@ -15,25 +15,25 @@ if [[ "$SKIP_BUILD" == false ]]; then
 fi
 
 if [[ ! -d "$APP_DIR" ]]; then
-  echo "Mori.app was not found at $APP_DIR" >&2
+  echo "Mirror.app was not found at $APP_DIR" >&2
   echo "Run scripts/build-app.sh before using --skip-build." >&2
   exit 1
 fi
 
 VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$INFO_PLIST")"
-DMG_PATH="$PROJECT_DIR/dist/Mori-$VERSION.dmg"
-STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mori-dmg.XXXXXX")"
+DMG_PATH="$PROJECT_DIR/dist/Mirror-$VERSION.dmg"
+STAGING_DIR="$(mktemp -d "${TMPDIR:-/tmp}/mirror-dmg.XXXXXX")"
 
 cleanup() {
   rm -rf "$STAGING_DIR"
 }
 trap cleanup EXIT
 
-cp -R "$APP_DIR" "$STAGING_DIR/Mori.app"
+cp -R "$APP_DIR" "$STAGING_DIR/Mirror.app"
 ln -s /Applications "$STAGING_DIR/Applications"
 
 hdiutil create \
-  -volname "Mori $VERSION" \
+  -volname "Mirror $VERSION" \
   -srcfolder "$STAGING_DIR" \
   -ov \
   -format UDZO \

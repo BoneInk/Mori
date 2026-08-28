@@ -144,8 +144,8 @@ struct CommandPaletteView: View {
                                     .foregroundStyle(item.isEnabled ? document.theme.accent : .secondary)
                                     .frame(width: 20)
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(item.title).font(.system(size: 12.5, weight: .medium))
-                                    Text(item.category).font(.system(size: 9.5)).foregroundStyle(.secondary)
+                                    Text(LocalizedStringKey(item.title)).font(.system(size: 12.5, weight: .medium))
+                                    Text(LocalizedStringKey(item.category)).font(.system(size: 9.5)).foregroundStyle(.secondary)
                                 }
                                 Spacer()
                                 if let shortcut = item.shortcut {

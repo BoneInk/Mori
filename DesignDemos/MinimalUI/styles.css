@@ -48,7 +48,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   place-items: center;
 }
 
-.mori-window {
+.mirror-window {
   position: relative;
   display: grid;
   grid-template-columns: var(--files-width) var(--outline-width) minmax(600px, 1fr);
@@ -209,15 +209,15 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .save-state { display: flex; align-items: center; gap: 5px; color: var(--secondary); }
 .status-spacer { flex: 1; }
 
-.mori-window.hide-files { --files-width: 0px; }
-.mori-window.hide-outline { --outline-width: 0px; }
-.mori-window.hide-files .titlebar-files, .mori-window.hide-files .file-panel,
-.mori-window.hide-outline .titlebar-outline, .mori-window.hide-outline .outline-panel { visibility: hidden; }
-.mori-window.mode-edit .writing-area { grid-template-columns: minmax(0, 1fr); }
-.mori-window.mode-edit .preview-pane { display: none; }
-.mori-window.mode-reader .writing-area { grid-template-columns: minmax(0, 1fr); }
-.mori-window.mode-reader .editor-pane { display: none; }
-.mori-window.mode-reader .preview-scroll { padding-inline: max(80px, calc((100% - 760px) / 2)); }
+.mirror-window.hide-files { --files-width: 0px; }
+.mirror-window.hide-outline { --outline-width: 0px; }
+.mirror-window.hide-files .titlebar-files, .mirror-window.hide-files .file-panel,
+.mirror-window.hide-outline .titlebar-outline, .mirror-window.hide-outline .outline-panel { visibility: hidden; }
+.mirror-window.mode-edit .writing-area { grid-template-columns: minmax(0, 1fr); }
+.mirror-window.mode-edit .preview-pane { display: none; }
+.mirror-window.mode-reader .writing-area { grid-template-columns: minmax(0, 1fr); }
+.mirror-window.mode-reader .editor-pane { display: none; }
+.mirror-window.mode-reader .preview-scroll { padding-inline: max(80px, calc((100% - 760px) / 2)); }
 
 @media (max-width: 1250px) {
   :root { --files-width: 205px; --outline-width: 190px; }

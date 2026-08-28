@@ -23,7 +23,7 @@ struct MarkdownEditor: NSViewRepresentable {
         scrollView.hasVerticalScroller = true
         scrollView.autohidesScrollers = true
 
-        let textView = MoriTextView()
+        let textView = MirrorTextView()
         textView.onInsertImages = onInsertImages
         textView.onPasteImage = onPasteImage
         textView.registerForDraggedTypes([.fileURL])
@@ -64,7 +64,7 @@ struct MarkdownEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = context.coordinator.textView else { return }
         context.coordinator.parent = self
-        if let textView = textView as? MoriTextView {
+        if let textView = textView as? MirrorTextView {
             textView.onInsertImages = onInsertImages
             textView.onPasteImage = onPasteImage
         }
@@ -238,8 +238,21 @@ struct MarkdownEditor: NSViewRepresentable {
             let glyphRange = layoutManager.glyphRange(forCharacterRange: NSRange(location: start, length: max(1, end - start)), actualCharacterRange: nil)
             let rect = layoutManager.boundingRect(forGlyphRange: glyphRange, in: textContainer)
             let fraction = rect.height > 1 ? Double((containerY - rect.minY) / rect.height) : 0
-            let position = ScrollPosition(line: line, fraction: min(1, max(0, fraction)))
+            let currentOffset = scrollView.contentView.bounds.minY
+            let maximumOffset = max(0, textView.bounds.height - scrollView.contentView.bounds.height)
+            let boundary: ScrollBoundary
+            if currentOffset <= 3 {
+                boundary = .top
+            } else if maximumOffset > 3, currentOffset >= maximumOffset - 3 {
+                boundary = .bottom
+            } else {
+                boundary = .none
+            }
+            let position = ScrollPosition(line: line,
+                                          fraction: min(1, max(0, fraction)),
+                                          boundary: boundary)
             if parent.scrollSource == .editor,
+               position.boundary == parent.scrollPosition.boundary,
                position.line == parent.scrollPosition.line,
                abs(position.fraction - parent.scrollPosition.fraction) < 0.012 {
                 return
@@ -265,7 +278,15 @@ struct MarkdownEditor: NSViewRepresentable {
                 + CGFloat(min(1, max(0, position.fraction))) * rect.height
                 - scrollView.contentView.bounds.height * CGFloat(guideFraction)
             let maximum = max(0, textView.bounds.height - scrollView.contentView.bounds.height)
-            let target = min(maximum, max(0, requested))
+            let target: CGFloat
+            switch position.boundary {
+            case .top:
+                target = 0
+            case .bottom:
+                target = maximum
+            case .none:
+                target = min(maximum, max(0, requested))
+            }
             guard abs(scrollView.contentView.bounds.minY - target) > 2 else { return }
             pendingScrollUpdate?.cancel()
             pendingScrollUpdate = nil
@@ -681,7 +702,7 @@ struct MarkdownEditor: NSViewRepresentable {
     }
 }
 
-private final class MoriTextView: NSTextView {
+private final class MirrorTextView: NSTextView {
     var onInsertImages: (([URL]) -> Bool)?
     var onPasteImage: ((NSImage) -> Bool)?
 

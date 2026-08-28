@@ -5,9 +5,10 @@ enum MarkdownRenderer {
                          title: String,
                          theme: EditorTheme,
                          typography: TypographySettings = .standard,
+                         preserveSingleLineBreaks: Bool = false,
                          embeddedMermaidScript: String? = nil,
                          embeddedMathScript: String? = nil) -> String {
-        let body = render(markdown)
+        let body = render(markdown, preserveSingleLineBreaks: preserveSingleLineBreaks)
         let sourceLineCount = max(1, markdown.components(separatedBy: .newlines).count)
         let hasMath = body.contains("data-math=")
         let mermaidTheme = theme.isDark ? "dark" : "neutral"
@@ -19,9 +20,11 @@ enum MarkdownRenderer {
         let embeddedMathRuntime = hasMath ? embeddedMathScript.map {
             "<script>\($0.replacingOccurrences(of: "</script", with: "<\\/script", options: .caseInsensitive))</script>"
         } ?? "" : ""
-        let mathStyle = hasMath ? "<style>\(MathRuntime.style ?? "")</style>" : ""
+        // Keep the math stylesheet resident so a live DOM update can introduce
+        // equations without requiring a visible page navigation.
+        let mathStyle = "<style>\(MathRuntime.style ?? "")</style>"
         let autoRender = (embeddedMermaidScript != nil || embeddedMathScript != nil)
-            ? "window.addEventListener('DOMContentLoaded',()=>window.moriRenderAll());" : ""
+            ? "window.addEventListener('DOMContentLoaded',()=>window.mirrorRenderAll());" : ""
         return """
         <!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
         <title>\(escape(title))</title><style>
@@ -34,31 +37,35 @@ enum MarkdownRenderer {
         .math-inline{display:inline-block;max-width:100%;vertical-align:-.08em}.math-block{display:block;max-width:100%;margin:1.5em 0;padding:.75em 1em;overflow-x:auto;text-align:center}.math-error{white-space:pre-wrap;text-align:left;color:#b43b3b;font:13px/1.55 \(codeFont);background:color-mix(in srgb,#d44 8%,var(--bg));border:1px solid color-mix(in srgb,#d44 24%,var(--line));border-radius:7px;padding:.75em}.footnote-ref{font-size:.72em;vertical-align:super;line-height:0;margin-left:.08em}.footnotes{margin-top:3em;padding-top:1em;border-top:1px solid var(--line);font-size:.86em;color:var(--muted)}.footnotes ol{padding-left:1.5em}.footnotes li{padding-left:.25em}.footnotes p{margin:.45em 0}.footnote-backref{margin-left:.35em;border:0}.front-matter{margin:0 0 1.6em;border:1px solid var(--line);border-radius:8px;background:color-mix(in srgb,var(--code) 42%,transparent);overflow:hidden}.front-matter summary{padding:.55em .85em;color:var(--muted);font-size:.8em;text-transform:uppercase;letter-spacing:.08em}.front-matter pre{border-top:1px solid var(--line);border-radius:0;font-size:.8em}.markdown-alert{margin:1.35em 0;padding:.85em 1em;border:1px solid color-mix(in srgb,var(--alert) 40%,var(--line));border-left:4px solid var(--alert);border-radius:7px;background:color-mix(in srgb,var(--alert) 7%,var(--bg))}.markdown-alert-title{display:flex;gap:.45em;align-items:center;margin-bottom:.3em;color:var(--alert);font-size:.82em;font-weight:750;text-transform:uppercase;letter-spacing:.055em}.markdown-alert p{margin:.3em 0}.alert-note{--alert:#3984d6}.alert-tip{--alert:#2a9d68}.alert-important{--alert:#8b5cf6}.alert-warning{--alert:#d58a20}.alert-caution{--alert:#d84b4b}
         @page{size:A4;margin:18mm}@media print{html,body{background:white!important;color:#111!important}body{padding:0;font-size:11pt}article{max-width:none}.code-block,.table-wrap,.diagram-block,blockquote{break-inside:avoid}a{color:inherit;text-decoration:underline}.code-header{print-color-adjust:exact;-webkit-print-color-adjust:exact}}
         </style>\(mathStyle)\(embeddedRuntime)\(embeddedMathRuntime)</head><body><article data-source-lines="\(sourceLineCount)">\(body)</article><script>
-        window.__moriLayoutChangedAt=performance.now();
-        window.moriInvalidateLayout=()=>{window.__moriSourceAnchors=null;window.__moriLayoutChangedAt=performance.now()};
-        window.moriAnchorTop=anchor=>{const article=document.querySelector('article');if(anchor.edge==='start')return article.getBoundingClientRect().top+window.scrollY;if(anchor.edge==='end')return article.getBoundingClientRect().bottom+window.scrollY;return anchor.element.getBoundingClientRect().top+window.scrollY};
-        window.moriSourceAnchors=()=>{if(window.__moriSourceAnchors)return window.__moriSourceAnchors;const article=document.querySelector('article'),total=Math.max(1,Number(article?.dataset.sourceLines)||1);const anchors=[...document.querySelectorAll('article > [data-source-line]')].map(element=>({element,line:Number(element.dataset.sourceLine)||0})).sort((a,b)=>a.line-b.line).filter((anchor,index,list)=>index===0||anchor.line>list[index-1].line);if(!anchors.length||anchors[0].line>0)anchors.unshift({line:0,edge:'start'});if(anchors[anchors.length-1].line<total)anchors.push({line:total,edge:'end'});window.__moriSourceAnchors=anchors;return anchors};
-        window.moriPositionForY=y=>{const anchors=window.moriSourceAnchors();if(!anchors.length)return{line:0,fraction:0};let low=0,high=anchors.length;while(low<high){const middle=(low+high)>>1;if(window.moriAnchorTop(anchors[middle])<=y)low=middle+1;else high=middle}const before=anchors[Math.max(0,low-1)],after=anchors[Math.min(anchors.length-1,low)],y0=window.moriAnchorTop(before),y1=window.moriAnchorTop(after),progress=after===before?0:Math.max(0,Math.min(1,(y-y0)/Math.max(1,y1-y0))),source=before.line+progress*(after.line-before.line),line=Math.floor(source);return{line,fraction:Math.max(0,Math.min(1,source-line))}};
-        window.moriYForPosition=(line,fraction)=>{const anchors=window.moriSourceAnchors();if(!anchors.length)return 0;const source=Math.max(0,Number(line)||0)+Math.max(0,Math.min(1,Number(fraction)||0));let low=0,high=anchors.length;while(low<high){const middle=(low+high)>>1;if(anchors[middle].line<=source)low=middle+1;else high=middle}const before=anchors[Math.max(0,low-1)],after=anchors[Math.min(anchors.length-1,low)],span=Math.max(1,after.line-before.line),progress=after===before?0:Math.max(0,Math.min(1,(source-before.line)/span));return window.moriAnchorTop(before)+progress*(window.moriAnchorTop(after)-window.moriAnchorTop(before))};
-        window.moriCurrentPosition=guide=>window.moriPositionForY(window.scrollY+window.innerHeight*Math.max(0,Math.min(1,Number(guide)||0)));
-        window.moriScrollToLine=(line,fraction,guide)=>{const viewportGuide=window.innerHeight*Math.max(0,Math.min(1,Number(guide)||0)),target=window.moriYForPosition(line,fraction)-viewportGuide;if(Math.abs(window.scrollY-target)>2)window.scrollTo(0,target)};
-        window.moriInstallLayoutObserver=()=>{if(window.__moriResizeObserver)return;const article=document.querySelector('article');window.__moriResizeObserver=new ResizeObserver(window.moriInvalidateLayout);if(article)window.__moriResizeObserver.observe(article);window.addEventListener('resize',window.moriInvalidateLayout,{passive:true})};
-        window.moriAwaitMedia=async()=>{const waits=[...document.images].map(image=>image.complete?(image.decode?image.decode().catch(()=>{}):Promise.resolve()):Promise.race([new Promise(resolve=>{image.addEventListener('load',resolve,{once:true});image.addEventListener('error',resolve,{once:true})}),new Promise(resolve=>setTimeout(resolve,1500))]));if(document.fonts?.ready)waits.push(document.fonts.ready.catch(()=>{}));await Promise.all(waits)};
-        window.moriLayoutStable=()=>performance.now()-window.__moriLayoutChangedAt>120;
-        window.moriRenderMermaid=async()=>{window.moriMermaidDone=false;try{const nodes=[...document.querySelectorAll('.mermaid:not([data-processed])')];if(!nodes.length)return;if(typeof mermaid==='undefined'){for(const node of nodes){node.classList.add('mermaid-error');node.textContent='Mermaid runtime is unavailable.'}return}mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'\(mermaidTheme)',fontFamily:'\(javascriptString(typography.previewFontFamily ?? "-apple-system"))'});for(const node of nodes){const source=node.textContent;try{await mermaid.parse(source);await mermaid.run({nodes:[node],suppressErrors:false})}catch(error){node.removeAttribute('data-processed');node.classList.add('mermaid-error');node.textContent='Diagram syntax error\\n'+(error?.message??String(error))}}}finally{window.moriMermaidDone=true}};
-        window.moriRenderMath=async()=>{window.moriMathDone=false;try{const nodes=[...document.querySelectorAll('[data-math]:not([data-math-rendered])')];if(!nodes.length)return;if(typeof katex==='undefined'){for(const node of nodes){node.classList.add('math-error');node.textContent='KaTeX runtime is unavailable.\\n'+node.textContent}return}for(const node of nodes){try{const source=new TextDecoder().decode(Uint8Array.from(atob(node.dataset.math),c=>c.charCodeAt(0)));katex.render(source,node,{displayMode:node.dataset.mathDisplay==='true',throwOnError:false,strict:'warn',trust:false,output:'htmlAndMathml'});node.dataset.mathRendered='true'}catch(error){node.classList.add('math-error');node.textContent='Math syntax error\\n'+(error?.message??String(error))}}}finally{window.moriMathDone=true}};
-        window.moriRenderAll=async()=>{window.moriEnhancementsDone=false;try{await Promise.all([window.moriRenderMermaid(),window.moriRenderMath()]);await window.moriAwaitMedia();window.moriInstallLayoutObserver();window.moriInvalidateLayout()}finally{window.moriEnhancementsDone=true}};
+        window.__mirrorLayoutChangedAt=performance.now();
+        window.mirrorInvalidateLayout=()=>{window.__mirrorSourceAnchors=null;window.__mirrorLayoutChangedAt=performance.now()};
+        window.mirrorAnchorTop=anchor=>{const article=document.querySelector('article');if(anchor.edge==='start')return article.getBoundingClientRect().top+window.scrollY;if(anchor.edge==='end')return article.getBoundingClientRect().bottom+window.scrollY;return anchor.element.getBoundingClientRect().top+window.scrollY};
+        window.mirrorSourceAnchors=()=>{if(window.__mirrorSourceAnchors)return window.__mirrorSourceAnchors;const article=document.querySelector('article'),total=Math.max(1,Number(article?.dataset.sourceLines)||1);const anchors=[...document.querySelectorAll('article > [data-source-line]')].map(element=>({element,line:Number(element.dataset.sourceLine)||0})).sort((a,b)=>a.line-b.line).filter((anchor,index,list)=>index===0||anchor.line>list[index-1].line);if(!anchors.length||anchors[0].line>0)anchors.unshift({line:0,edge:'start'});if(anchors[anchors.length-1].line<total)anchors.push({line:total,edge:'end'});window.__mirrorSourceAnchors=anchors;return anchors};
+        window.mirrorPositionForY=y=>{const anchors=window.mirrorSourceAnchors();if(!anchors.length)return{line:0,fraction:0};let low=0,high=anchors.length;while(low<high){const middle=(low+high)>>1;if(window.mirrorAnchorTop(anchors[middle])<=y)low=middle+1;else high=middle}const before=anchors[Math.max(0,low-1)],after=anchors[Math.min(anchors.length-1,low)],y0=window.mirrorAnchorTop(before),y1=window.mirrorAnchorTop(after),progress=after===before?0:Math.max(0,Math.min(1,(y-y0)/Math.max(1,y1-y0))),source=before.line+progress*(after.line-before.line),line=Math.floor(source);return{line,fraction:Math.max(0,Math.min(1,source-line))}};
+        window.mirrorYForPosition=(line,fraction)=>{const anchors=window.mirrorSourceAnchors();if(!anchors.length)return 0;const source=Math.max(0,Number(line)||0)+Math.max(0,Math.min(1,Number(fraction)||0));let low=0,high=anchors.length;while(low<high){const middle=(low+high)>>1;if(anchors[middle].line<=source)low=middle+1;else high=middle}const before=anchors[Math.max(0,low-1)],after=anchors[Math.min(anchors.length-1,low)],span=Math.max(1,after.line-before.line),progress=after===before?0:Math.max(0,Math.min(1,(source-before.line)/span));return window.mirrorAnchorTop(before)+progress*(window.mirrorAnchorTop(after)-window.mirrorAnchorTop(before))};
+        window.mirrorMaxScrollY=()=>Math.max(0,Math.max(document.documentElement?.scrollHeight||0,document.body?.scrollHeight||0)-window.innerHeight);
+        window.mirrorCurrentPosition=guide=>{const position=window.mirrorPositionForY(window.scrollY+window.innerHeight*Math.max(0,Math.min(1,Number(guide)||0))),maximum=window.mirrorMaxScrollY();position.boundary=window.scrollY<=3?'top':maximum>3&&window.scrollY>=maximum-3?'bottom':'none';return position};
+        window.mirrorScrollToLine=(line,fraction,guide)=>{const viewportGuide=window.innerHeight*Math.max(0,Math.min(1,Number(guide)||0)),target=window.mirrorYForPosition(line,fraction)-viewportGuide;if(Math.abs(window.scrollY-target)>2)window.scrollTo(0,target)};
+        window.mirrorScrollToPosition=(line,fraction,guide,boundary)=>{let target;if(boundary==='top')target=0;else if(boundary==='bottom')target=window.mirrorMaxScrollY();else return window.mirrorScrollToLine(line,fraction,guide);if(Math.abs(window.scrollY-target)>2)window.scrollTo(0,target)};
+        window.mirrorInstallLayoutObserver=()=>{if(window.__mirrorResizeObserver)return;const article=document.querySelector('article');window.__mirrorResizeObserver=new ResizeObserver(window.mirrorInvalidateLayout);if(article)window.__mirrorResizeObserver.observe(article);window.addEventListener('resize',window.mirrorInvalidateLayout,{passive:true})};
+        window.mirrorAwaitMedia=async()=>{const waits=[...document.images].map(image=>image.complete?(image.decode?image.decode().catch(()=>{}):Promise.resolve()):Promise.race([new Promise(resolve=>{image.addEventListener('load',resolve,{once:true});image.addEventListener('error',resolve,{once:true})}),new Promise(resolve=>setTimeout(resolve,1500))]));if(document.fonts?.ready)waits.push(document.fonts.ready.catch(()=>{}));await Promise.all(waits)};
+        window.mirrorLayoutStable=()=>performance.now()-window.__mirrorLayoutChangedAt>120;
+        window.mirrorRenderMermaid=async()=>{window.mirrorMermaidDone=false;try{const nodes=[...document.querySelectorAll('.mermaid:not([data-processed])')];if(!nodes.length)return;if(typeof mermaid==='undefined'){for(const node of nodes){node.classList.add('mermaid-error');node.textContent='Mermaid runtime is unavailable.'}return}mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:'\(mermaidTheme)',fontFamily:'\(javascriptString(typography.previewFontFamily ?? "-apple-system"))'});for(const node of nodes){const source=node.textContent;try{await mermaid.parse(source);await mermaid.run({nodes:[node],suppressErrors:false})}catch(error){node.removeAttribute('data-processed');node.classList.add('mermaid-error');node.textContent='Diagram syntax error\\n'+(error?.message??String(error))}}}finally{window.mirrorMermaidDone=true}};
+        window.mirrorRenderMath=async()=>{window.mirrorMathDone=false;try{const nodes=[...document.querySelectorAll('[data-math]:not([data-math-rendered])')];if(!nodes.length)return;if(typeof katex==='undefined'){for(const node of nodes){node.classList.add('math-error');node.textContent='KaTeX runtime is unavailable.\\n'+node.textContent}return}for(const node of nodes){try{const source=new TextDecoder().decode(Uint8Array.from(atob(node.dataset.math),c=>c.charCodeAt(0)));katex.render(source,node,{displayMode:node.dataset.mathDisplay==='true',throwOnError:false,strict:'warn',trust:false,output:'htmlAndMathml'});node.dataset.mathRendered='true'}catch(error){node.classList.add('math-error');node.textContent='Math syntax error\\n'+(error?.message??String(error))}}}finally{window.mirrorMathDone=true}};
+        window.mirrorRenderAll=async()=>{window.mirrorEnhancementsDone=false;try{await Promise.all([window.mirrorRenderMermaid(),window.mirrorRenderMath()]);await window.mirrorAwaitMedia();window.mirrorInstallLayoutObserver();window.mirrorInvalidateLayout()}finally{window.mirrorEnhancementsDone=true}};
+        window.mirrorReplaceContent=(content,sourceLines,title,line,fraction,guide,boundary,generation)=>{const article=document.querySelector('article');if(!article)return false;window.__mirrorContentGeneration=Number(generation)||0;if(window.__mirrorResizeObserver){window.__mirrorResizeObserver.disconnect();window.__mirrorResizeObserver=null}article.innerHTML=String(content??'');article.dataset.sourceLines=String(Math.max(1,Number(sourceLines)||1));document.title=String(title??document.title);window.mirrorInvalidateLayout();window.mirrorInstallLayoutObserver();window.mirrorScrollToPosition(line,fraction,guide,boundary);requestAnimationFrame(()=>{if(window.__mirrorContentGeneration===Number(generation))window.mirrorScrollToPosition(line,fraction,guide,boundary)});Promise.resolve(window.mirrorRenderAll()).then(()=>{if(window.__mirrorContentGeneration!==Number(generation))return;window.mirrorScrollToPosition(line,fraction,guide,boundary);requestAnimationFrame(()=>window.mirrorScrollToPosition(line,fraction,guide,boundary))});return true};
         \(autoRender)
         </script></body></html>
         """
     }
 
-    static func render(_ markdown: String) -> String {
-        render(markdown, inheritedReferences: [:])
+    static func render(_ markdown: String, preserveSingleLineBreaks: Bool = false) -> String {
+        render(markdown, inheritedReferences: [:], preserveSingleLineBreaks: preserveSingleLineBreaks)
     }
 
     private static func render(_ markdown: String,
-                               inheritedReferences: [String: LinkDefinition]) -> String {
+                               inheritedReferences: [String: LinkDefinition],
+                               preserveSingleLineBreaks: Bool) -> String {
         let lines = markdown.components(separatedBy: .newlines)
         let frontMatter = frontMatterRange(in: lines)
         let footnotes = collectFootnotes(lines, ignoring: frontMatter)
@@ -83,7 +90,7 @@ enum MarkdownRenderer {
 
         func closeParagraph() {
             guard !paragraph.isEmpty else { return }
-            html.append("<p data-source-line=\"\(paragraphStart ?? 0)\">\(inline(joinParagraphLines(paragraph), footnotes: footnotes.numbers, references: resolvedReferences).replacingOccurrences(of: hardBreakPlaceholder, with: "<br>"))</p>")
+            html.append("<p data-source-line=\"\(paragraphStart ?? 0)\">\(inline(joinParagraphLines(paragraph, preserveSingleLineBreaks: preserveSingleLineBreaks), footnotes: footnotes.numbers, references: resolvedReferences).replacingOccurrences(of: hardBreakPlaceholder, with: "<br>"))</p>")
             paragraph.removeAll()
             paragraphStart = nil
         }
@@ -206,7 +213,7 @@ enum MarkdownRenderer {
                     quoted.append(stripBlockquotePrefix(lines[index]))
                     index += 1
                 }
-                html.append("<blockquote data-source-line=\"\(sourceLine)\">\(render(quoted.joined(separator: "\n"), inheritedReferences: resolvedReferences))</blockquote>")
+                html.append("<blockquote data-source-line=\"\(sourceLine)\">\(render(quoted.joined(separator: "\n"), inheritedReferences: resolvedReferences, preserveSingleLineBreaks: preserveSingleLineBreaks))</blockquote>")
             } else if parseListEntry(raw, sourceLine: sourceLine) != nil {
                 closeParagraph()
                 var entries = [parseListEntry(raw, sourceLine: sourceLine)!]
@@ -457,9 +464,9 @@ enum MarkdownRenderer {
         return nil
     }
 
-    private static let hardBreakPlaceholder = "\u{E004}MORIBREAK\u{E005}"
+    private static let hardBreakPlaceholder = "\u{E004}MIRRORBREAK\u{E005}"
 
-    private static func joinParagraphLines(_ lines: [String]) -> String {
+    private static func joinParagraphLines(_ lines: [String], preserveSingleLineBreaks: Bool) -> String {
         lines.enumerated().map { index, line in
             guard index < lines.count - 1 else { return line }
             if line.hasSuffix("  ") {
@@ -468,7 +475,7 @@ enum MarkdownRenderer {
             if line.hasSuffix("\\") {
                 return String(line.dropLast()) + hardBreakPlaceholder
             }
-            return line + " "
+            return line + (preserveSingleLineBreaks ? hardBreakPlaceholder : " ")
         }.joined()
     }
 
@@ -1068,23 +1075,23 @@ enum MarkdownRenderer {
     }
 
     private static func htmlPlaceholder(_ index: Int) -> String {
-        "\u{E000}MORIHTML\(index)\u{E001}"
+        "\u{E000}MIRRORHTML\(index)\u{E001}"
     }
 
     private static func inlinePlaceholder(_ index: Int) -> String {
-        "\u{E002}MORILITERAL\(index)\u{E003}"
+        "\u{E002}MIRRORLITERAL\(index)\u{E003}"
     }
 
     private static func escapedPunctuationPlaceholder(_ index: Int) -> String {
-        "\u{E006}MORIESCAPE\(index)\u{E007}"
+        "\u{E006}MIRRORESCAPE\(index)\u{E007}"
     }
 
     private static func referencePlaceholder(_ index: Int) -> String {
-        "\u{E008}MORIREFERENCE\(index)\u{E009}"
+        "\u{E008}MIRRORREFERENCE\(index)\u{E009}"
     }
 
     private static func codeSpanPlaceholder(_ index: Int) -> String {
-        "\u{E00A}MORICODESPAN\(index)\u{E00B}"
+        "\u{E00A}MIRRORCODESPAN\(index)\u{E00B}"
     }
 
     private static func mathData(_ source: String) -> String {

@@ -1,4 +1,4 @@
-const app = document.getElementById('mori-window');
+const app = document.getElementById('mirror-window');
 const fileToggle = document.getElementById('toggle-files');
 const outlineToggle = document.getElementById('toggle-outline');
 const sourceScroll = document.getElementById('source-scroll');

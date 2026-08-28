@@ -56,8 +56,8 @@ $$
 
 ~~~mermaid
 sequenceDiagram
-    User->>Mori: Render
-    Mori-->>User: Done
+    User->>Mirror: Render
+    Mirror-->>User: Done
 ~~~
 
 [^source]: This footnote is rendered locally.
@@ -70,8 +70,16 @@ let html = MarkdownRenderer.document(markdown: markdown,
                                      embeddedMermaidScript: MermaidRuntime.script,
                                      embeddedMathScript: MathRuntime.script)
 
+let standardSoftBreak = MarkdownRenderer.render("first line\nsecond line")
+let preservedSoftBreak = MarkdownRenderer.render("first line\nsecond line", preserveSingleLineBreaks: true)
+guard standardSoftBreak.contains("first line second line"),
+      preservedSoftBreak.contains("first line<br>second line") else {
+    fputs("Single-line-break preference was not applied correctly.\n", stderr)
+    exit(2)
+}
+
 let portableRoot = FileManager.default.temporaryDirectory
-    .appendingPathComponent("MoriPortableHTML-\(UUID().uuidString)", isDirectory: true)
+    .appendingPathComponent("MirrorPortableHTML-\(UUID().uuidString)", isDirectory: true)
 try FileManager.default.createDirectory(at: portableRoot, withIntermediateDirectories: true)
 let portableImage = portableRoot.appendingPathComponent("sample.png")
 let portableImageData = Data([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A])
@@ -102,7 +110,8 @@ guard html.contains("data-math="),
       html.contains("alt=\"Remote image\" title=\"Example\""),
       html.contains("href=\"docs/Guide File.md\" title=\"Guide title\">Reference <strong>link</strong></a>"),
       html.contains("src=\"https://example.com/reference.png\" alt=\"Reference image\""),
-      html.contains("window.__moriSourceAnchors"),
+      html.contains("window.__mirrorSourceAnchors"),
+      html.contains("window.mirrorScrollToPosition"),
       html.contains("article > [data-source-line]"),
       !html.contains("[guide]:"),
       !html.contains("href=\"javascript:"),
@@ -130,7 +139,7 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        webView.evaluateJavaScript("if(window.moriRenderAll){window.moriRenderAll()} true") { [weak self] _, error in
+        webView.evaluateJavaScript("if(window.mirrorRenderAll){window.mirrorRenderAll()} true") { [weak self] _, error in
             if let error { self?.fail("Enhancement startup failed: \(error)") }
             else { self?.poll() }
         }
@@ -138,7 +147,7 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
 
     private func poll() {
         attempts += 1
-        webView.evaluateJavaScript("window.moriEnhancementsDone !== false && window.moriMermaidDone !== false && window.moriMathDone !== false && (!window.moriLayoutStable || window.moriLayoutStable())") { [weak self] value, _ in
+        webView.evaluateJavaScript("window.mirrorEnhancementsDone !== false && window.mirrorMermaidDone !== false && window.mirrorMathDone !== false && (!window.mirrorLayoutStable || window.mirrorLayoutStable())") { [weak self] value, _ in
             guard let self else { return }
             if value as? Bool == true {
                 self.verifyDOM()
@@ -154,9 +163,14 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
         let script = """
         (() => {
           const probeSource = 12.4;
-          const probeY = window.moriYForPosition(12, 0.4);
-          const roundTrip = window.moriPositionForY(probeY);
-          const anchors = window.moriSourceAnchors();
+          const probeY = window.mirrorYForPosition(12, 0.4);
+          const roundTrip = window.mirrorPositionForY(probeY);
+          const anchors = window.mirrorSourceAnchors();
+          const topBoundary = window.mirrorCurrentPosition(0.35).boundary;
+          window.mirrorScrollToPosition(0, 0, 0.35, 'bottom');
+          const bottomBoundary = window.mirrorCurrentPosition(0.35).boundary;
+          const bottomOffsetError = Math.abs(window.scrollY - window.mirrorMaxScrollY());
+          window.mirrorScrollToPosition(0, 0, 0.35, 'top');
           return {
           math: document.querySelectorAll('.katex').length,
           displays: document.querySelectorAll('.katex-display').length,
@@ -182,8 +196,11 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
           allSourceNodes: document.querySelectorAll('[data-source-line]').length,
           indexedTopLevelLists: document.querySelectorAll('article > ul[data-source-line],article > ol[data-source-line]').length,
           syncRoundTripError: Math.abs(roundTrip.line + roundTrip.fraction - probeSource),
+          topBoundary,
+          bottomBoundary,
+          bottomOffsetError,
           sourceAnchorsOrdered: anchors.every((anchor, index) => index === 0 || anchor.line > anchors[index - 1].line),
-          layoutObserverInstalled: Boolean(window.__moriResizeObserver),
+          layoutObserverInstalled: Boolean(window.__mirrorResizeObserver),
           errors: document.querySelectorAll('.math-error,.mermaid-error').length
           };
         })()
@@ -216,6 +233,9 @@ final class SmokeDelegate: NSObject, WKNavigationDelegate {
                   (result["sourceAnchors"] as? Int ?? 0) < (result["allSourceNodes"] as? Int ?? 0),
                   (result["indexedTopLevelLists"] as? Int ?? 0) >= 3,
                   (result["syncRoundTripError"] as? Double ?? 1) < 0.001,
+                  (result["topBoundary"] as? String) == "top",
+                  (result["bottomBoundary"] as? String) == "bottom",
+                  (result["bottomOffsetError"] as? Double ?? 1) < 1,
                   (result["sourceAnchorsOrdered"] as? Bool) == true,
                   (result["layoutObserverInstalled"] as? Bool) == true,
                   (result["errors"] as? Int ?? 1) == 0 else {
